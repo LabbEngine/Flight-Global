@@ -588,6 +588,17 @@ body.sim-on .sidebar { display: none; }
 .dash-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .dash-route { font-size: 13.5px; font-weight: 680; }
 .dash-exit { padding: 4px 10px; font-size: 11px; }
+.dash-leg {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px 7px;
+  margin-top: 7px; font-size: 11.5px; font-weight: 660; color: var(--accent);
+}
+.dash-leg .leg-count {
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted); background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--stroke); border-radius: 20px; padding: 3px 8px;
+}
+.dash-leg .leg-arrow { color: var(--muted); }
+.dash-leg[hidden] { display: none; }
 .dash-bar {
   height: 4px; border-radius: 4px; margin: 10px 0 12px;
   background: rgba(255, 255, 255, 0.1); overflow: hidden;
