@@ -17,15 +17,36 @@ There is no build step and no backend. The repository is the whole application.
 
 ## Getting started
 
+The application is a set of static files. You only need Python 3 to serve them locally — no Git, no build tools, and no dependency installation.
+
+### Download and run
+
+1. Open the repository on GitHub: <https://github.com/LabbEngine/Flight-Global>.
+2. Click the green **Code** button, then **Download ZIP**.
+3. Unzip the downloaded file. This produces a folder named `Flight-Global-main`; move it to your Desktop (or anywhere convenient) and open it.
+4. Open a terminal inside that folder:
+   - **macOS:** right-click the folder in Finder and choose *New Terminal at Folder*, or run `cd ~/Desktop/Flight-Global-main`.
+   - **Windows:** open the folder in File Explorer, type `cmd` in the address bar, and press Enter.
+   - **Linux:** right-click inside the folder and choose *Open Terminal*, or `cd` into it.
+5. Start the server:
+
+   ```bash
+   python run.py
+   ```
+
+   If `python` is not found, use `python3 run.py`.
+
+Your browser opens automatically at <http://localhost:8003>. Stop the server with `Ctrl+C` in the terminal.
+
+`run.py` is a small static file server; it exists only because browsers refuse to load the textures and JSON data over `file://`, so the files must be served over `localhost`. Nothing else is installed: Three.js and GSAP are vendored under `vendor/`, and all textures and data are committed.
+
+### Alternative: clone with Git
+
 ```bash
 git clone https://github.com/LabbEngine/Flight-Global.git
 cd Flight-Global
 python run.py
 ```
-
-`run.py` is a small static file server that opens your browser at `http://localhost:8003`. A server is required because browsers refuse to load the textures and JSON data over `file://`. Stop it with `Ctrl+C`. On macOS and Linux, use `python3` if `python` is not found.
-
-No dependency installation is needed: Three.js and GSAP are vendored under `vendor/`, and all textures and data are committed.
 
 ## Features
 
