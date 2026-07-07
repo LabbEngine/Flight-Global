@@ -68,9 +68,10 @@ export class GreatCircleCurve extends THREE.Curve {
   }
 }
 
-// A pleasing arc height: longer routes fly higher.
+// A pleasing arc height: longer routes fly higher. Kept fairly low so the plane
+// flies close to the ground and the satellite tiles render at high detail.
 export function arcAltitude(angular) {
-  return 0.012 + angular * 0.075;
+  return 0.012 + angular * 0.04;
 }
 
 // Where the sun is directly overhead right now. Declination approximation

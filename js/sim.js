@@ -410,11 +410,11 @@ export class FlightSim {
         const dir = st.fwd.clone().multiplyScalar(-1).addScaledVector(up, 0.34).normalize();
         dir.applyAxisAngle(up, this.orbitYaw);
         dir.applyAxisAngle(right.clone().applyAxisAngle(up, this.orbitYaw), this.orbitPitch);
-        camPos = st.pos.clone().addScaledVector(dir, 0.06 * this.followZoom);
+        camPos = st.pos.clone().addScaledVector(dir, 0.042 * this.followZoom);
         q = quatLookAt(camPos, st.pos, up); // plane stays centered whatever the orbit
       } else {
-        // top: a high overhead so you see plenty of ground around the plane
-        camPos = st.pos.clone().addScaledVector(up, 0.16 * this.followZoom);
+        // top: a lower overhead so the satellite ground renders in high detail
+        camPos = st.pos.clone().addScaledVector(up, 0.085 * this.followZoom);
         q = quatLookAt(camPos, st.pos, st.fwd);
       }
       if (camPos.length() < 1.006) camPos.setLength(1.006);
