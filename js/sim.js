@@ -73,8 +73,10 @@ export class FlightSim {
     if (!this.boardingEl.hidden) return; // already boarding — don't wipe the seat pick
     this.ctx = ctx;
     this.seat = null;
+    this.simAirports = false; // "Simulate airports": re-board at each connecting stop
     this.tripMinutes = ctx.tripMinutes || 15;
     this.layoverMinutes = ctx.layoverMinutes || 5;
+    const multiLeg = (ctx.flight?.legs?.length || 1) > 1;
     const { origin, dest, aircraft } = ctx;
     // real airport call signs (e.g. ARN, HND) — supplied by main from the atlas
     this.originCode = ctx.originCode || (origin.iata || origin.name.slice(0, 3)).toUpperCase();
@@ -122,6 +124,7 @@ export class FlightSim {
           </div>
         </div>
         <div class="bp-trip">${this.#tripSummary()}</div>
+        ${multiLeg ? `<button class="bp-simair" id="bp-simair" type="button"><span class="simair-check"></span><span>Simulate airports</span><span class="simair-hint">board again at each stop</span></button>` : ''}
         <button class="btn btn--primary" id="bp-board" disabled>Pick a seat to board</button>
       </div>`;
     this.#buildSeatMap();
@@ -130,6 +133,8 @@ export class FlightSim {
       { opacity: 1, y: 0, scale: 1, duration: 0.45, ease: 'power3.out' });
     document.getElementById('bp-close').onclick = () => this.closeBoarding();
     document.getElementById('bp-board').onclick = () => this.#startBoarding();
+    const simBtn = document.getElementById('bp-simair');
+    if (simBtn) simBtn.onclick = () => { this.simAirports = !this.simAirports; simBtn.classList.toggle('is-on', this.simAirports); };
   }
 
   boardRandomSeat() {
@@ -194,7 +199,7 @@ export class FlightSim {
     this.takeoffBackstop = gsap.delayedCall(11, () => this.#begin());
   }
 
-  #showBoardingQueue(onDone) {
+  #showBoardingQueue(onDone, opts = {}) {
     const tier = tierFor();
     const groups = [
       { name: 'Passengers needing assistance', tier: null },
@@ -206,11 +211,14 @@ export class FlightSim {
     ];
     const youIdx = Math.max(0, groups.findIndex((g) => g.tier === tier.key));
     const el = document.getElementById('board-queue');
+    const title = opts.title || 'Now boarding';
+    const flightLine = opts.flight || `${this.flightNo} · Gate ${this.gate}`;
+    const footEnd = opts.footEnd || "You're aboard — cleared for pushback";
     el.innerHTML = `
       <div class="bq-card glass">
         <div class="bq-head">
-          <span class="bq-title">Now boarding</span>
-          <span class="bq-flight">${this.flightNo} · Gate ${this.gate}</span>
+          <span class="bq-title">${title}</span>
+          <span class="bq-flight">${flightLine}</span>
         </div>
         <div class="bq-sub"><b style="color:${tier.color}">${tier.name} member</b> · you're in group ${youIdx + 1} of ${groups.length}</div>
         <div class="bq-list">
@@ -228,7 +236,7 @@ export class FlightSim {
     const tl = gsap.timeline({
       onComplete: () => {
         gsap.to(card, { opacity: 0, scale: 0.95, duration: 0.45, ease: 'power2.in', onComplete: () => { el.hidden = true; } });
-        onDone();
+        if (onDone) onDone();
       },
     });
     tl.fromTo(card, { opacity: 0, y: 24, scale: 0.9 }, { opacity: 1, y: 0, scale: 1, duration: 0.6, ease: 'back.out(1.5)' });
@@ -239,9 +247,24 @@ export class FlightSim {
       tl.add(() => { row.classList.remove('is-boarding'); row.classList.add('is-done'); }, t + per * 0.62);
       tl.to('#bq-fill', { width: `${((i + 1) / boardCount) * 100}%`, duration: per * 0.62, ease: 'power1.out' }, t);
     });
-    tl.add(() => { const f = document.getElementById('bq-foot'); if (f) f.textContent = "You're aboard — cleared for pushback"; }, 0.5 + boardCount * per);
+    tl.add(() => { const f = document.getElementById('bq-foot'); if (f) f.textContent = footEnd; }, 0.5 + boardCount * per);
     tl.to({}, { duration: 0.9 });
     this.queueTl = tl;
+  }
+
+  // "Simulate airports": replay the gate boarding sequence at a connecting stop.
+  #airportBoarding(stopIdx) {
+    const flight = this.ctx.flight || {};
+    const stop = flight.stops?.[stopIdx];
+    const nextLeg = (flight.legs || [])[stopIdx + 1];
+    const at = stop ? (stop.iata || stop.name.slice(0, 3)).toUpperCase() : this.#stopName(stopIdx);
+    const to = nextLeg ? (nextLeg.to.iata || nextLeg.to.name.slice(0, 3)).toUpperCase() : this.destCode;
+    const gate = 'ABCDEF'[Math.floor(Math.random() * 6)] + (1 + Math.floor(Math.random() * 22));
+    this.#showBoardingQueue(null, {
+      title: `Now boarding · ${at}`,
+      flight: `${at} → ${to} · Gate ${gate}`,
+      footEnd: `Boarding complete — next leg to ${to}`,
+    });
   }
 
   #hideQueue() {
@@ -322,6 +345,7 @@ export class FlightSim {
     }
     this.journeyDurS = Math.max(1, t);
     this.atStop = null;
+    this._shownStop = -1; // last connecting airport we replayed boarding for (sim-airports)
     this.legIdx = 0; // which leg is current, for the "Leg" camera + dashboard readout
   }
   #stopName(i) { const s = this.ctx.flight?.stops?.[i]; return s ? (s.iata || s.name) : 'stop'; }
@@ -344,6 +368,10 @@ export class FlightSim {
     if (ph && ph.type === 'stop') {
       this.route.setProgressKm(ph.km);
       this.atStop = { name: this.#stopName(ph.stopIdx), remainS: Math.max(0, ph.t1 - el) };
+      if (this.simAirports && this._shownStop !== ph.stopIdx) {
+        this._shownStop = ph.stopIdx; // replay boarding once, when we first reach this airport
+        this.#airportBoarding(ph.stopIdx);
+      }
     } else if (ph) {
       const f = ph.t1 > ph.t0 ? Math.min(1, (el - ph.t0) / (ph.t1 - ph.t0)) : 1;
       this.route.setProgressKm(ph.km0 + (ph.km1 - ph.km0) * f);

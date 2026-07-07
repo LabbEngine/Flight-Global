@@ -562,6 +562,26 @@ body.sim-on .sidebar { display: none; }
 .seat.is-occ { background: #14171d; border-color: transparent; cursor: not-allowed; }
 .seat.is-sel { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 10px rgba(55, 198, 255, 0.6); }
 .boarding-card .btn--primary { width: 100%; }
+.bp-simair {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 9px 12px; margin: 0 0 10px; border-radius: 11px;
+  background: rgba(255, 255, 255, 0.05); border: 1px solid var(--stroke);
+  color: var(--ink); font-size: 12.5px; font-weight: 620; cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.bp-simair:hover { background: rgba(255, 255, 255, 0.09); }
+.bp-simair.is-on { border-color: rgba(111, 176, 221, 0.5); background: rgba(111, 176, 221, 0.1); }
+.simair-check {
+  width: 34px; height: 18px; border-radius: 20px; flex: none; position: relative;
+  background: rgba(255, 255, 255, 0.14); transition: background 0.18s ease;
+}
+.simair-check::after {
+  content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px;
+  border-radius: 50%; background: #fff; transition: transform 0.18s ease;
+}
+.bp-simair.is-on .simair-check { background: var(--accent); }
+.bp-simair.is-on .simair-check::after { transform: translateX(16px); }
+.simair-hint { margin-left: auto; font-size: 10.5px; font-weight: 500; color: var(--muted); }
 
 /* boarding queue popup (Board -> gate -> takeoff), centered on screen */
 #board-queue {
