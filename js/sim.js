@@ -124,7 +124,7 @@ export class FlightSim {
           </div>
         </div>
         <div class="bp-trip">${this.#tripSummary()}</div>
-        ${multiLeg ? `<button class="bp-simair" id="bp-simair" type="button"><span class="simair-check"></span><span>Simulate airports</span><span class="simair-hint">board again at each stop</span></button>` : ''}
+        <button class="bp-simair" id="bp-simair" type="button"><span class="simair-check"></span><span>Simulate airports</span><span class="simair-hint">${multiLeg ? 'walk each airport to your seat' : 'walk the airport to your seat'}</span></button>
         <button class="btn btn--primary" id="bp-board" disabled>Pick a seat to board</button>
       </div>`;
     this.#buildSeatMap();
@@ -192,11 +192,19 @@ export class FlightSim {
     document.body.classList.add('sim-on');
     this.globe.setBrightness(1.24, 0.7);
     this.ui.toast(`Seat ${this.seat} · welcome aboard`);
-    const { origin } = this.ctx;
+    const { origin, dest } = this.ctx;
     this.controls.flyTo({ lat: origin.lat, lng: origin.lng, dist: 1.14, duration: 2.4 }); // zoom into the gate
-    this.#showBoardingQueue(() => this.#begin());
-    // begin even if the boarding queue is interrupted
-    this.takeoffBackstop = gsap.delayedCall(11, () => this.#begin());
+    if (this.simAirports) {
+      // play the 2D airport to your gate & seat, then take off
+      this.#playAirport({
+        origin: this.originCode, originCity: origin.name, dest: this.destCode, destCity: dest.name,
+        seat: this.seat, member: tierFor().name, flight: this.flightNo, gate: this.gate,
+      }).then(() => this.#begin());
+    } else {
+      this.#showBoardingQueue(() => this.#begin());
+      // begin even if the boarding queue is interrupted
+      this.takeoffBackstop = gsap.delayedCall(11, () => this.#begin());
+    }
   }
 
   #showBoardingQueue(onDone, opts = {}) {
@@ -252,19 +260,35 @@ export class FlightSim {
     this.queueTl = tl;
   }
 
-  // "Simulate airports": replay the gate boarding sequence at a connecting stop.
-  #airportBoarding(stopIdx) {
+  // Launch the 2D airport minigame overlay; resolves when the player boards (or skips).
+  #playAirport(params) {
+    return new Promise((resolve) => {
+      const host = document.getElementById('airport-game');
+      const frame = document.getElementById('airport-frame');
+      if (!host || !frame) { resolve(); return; }
+      const onMsg = (e) => {
+        if (!e.data || e.data.type !== 'airport-done') return;
+        window.removeEventListener('message', onMsg);
+        setTimeout(() => { host.hidden = true; frame.src = 'about:blank'; resolve(); }, e.data.skipped ? 200 : 1500);
+      };
+      window.addEventListener('message', onMsg);
+      frame.src = 'airport.html?' + new URLSearchParams(params).toString();
+      host.hidden = false;
+    });
+  }
+  #pauseJourney() { if (!this._pauseAt) this._pauseAt = performance.now(); }        // freeze the flight timeline
+  #skipJourneyTo(t) { this._pauseAt = 0; this.flightStartPerf = performance.now() - t * 1000; } // resume, jump to time t
+  // A connecting airport: pause the flight, play the pitstop game, then depart the next leg.
+  #airportStop(stopIdx, stopEndS) {
+    this.#pauseJourney();
     const flight = this.ctx.flight || {};
     const stop = flight.stops?.[stopIdx];
     const nextLeg = (flight.legs || [])[stopIdx + 1];
-    const at = stop ? (stop.iata || stop.name.slice(0, 3)).toUpperCase() : this.#stopName(stopIdx);
-    const to = nextLeg ? (nextLeg.to.iata || nextLeg.to.name.slice(0, 3)).toUpperCase() : this.destCode;
-    const gate = 'ABCDEF'[Math.floor(Math.random() * 6)] + (1 + Math.floor(Math.random() * 22));
-    this.#showBoardingQueue(null, {
-      title: `Now boarding · ${at}`,
-      flight: `${at} → ${to} · Gate ${gate}`,
-      footEnd: `Boarding complete — next leg to ${to}`,
-    });
+    this.#playAirport({
+      origin: this.#wpCode(stop), originCity: stop?.name || '',
+      dest: nextLeg ? this.#wpCode(nextLeg.to) : this.destCode, destCity: nextLeg?.to?.name || this.ctx.dest.name,
+      seat: this.seat, member: tierFor().name, flight: this.flightNo, gate: this.gate,
+    }).then(() => this.#skipJourneyTo(stopEndS));
   }
 
   #hideQueue() {
@@ -345,7 +369,8 @@ export class FlightSim {
     }
     this.journeyDurS = Math.max(1, t);
     this.atStop = null;
-    this._shownStop = -1; // last connecting airport we replayed boarding for (sim-airports)
+    this._shownStop = -1; // last connecting airport we played the pitstop for
+    this._pauseAt = 0; // >0 while the flight timeline is frozen for the airport game
     this.legIdx = 0; // which leg is current, for the "Leg" camera + dashboard readout
   }
   #stopName(i) { const s = this.ctx.flight?.stops?.[i]; return s ? (s.iata || s.name) : 'stop'; }
@@ -362,6 +387,7 @@ export class FlightSim {
       return;
     }
     if (!this.inFlight || this.landed) return;
+    if (this._pauseAt) return; // frozen while the airport pitstop game is up
     const el = this.#elapsedS();
     let ph = this.journey[this.journey.length - 1];
     for (const p of this.journey) { if (el < p.t1) { ph = p; break; } }
@@ -369,8 +395,8 @@ export class FlightSim {
       this.route.setProgressKm(ph.km);
       this.atStop = { name: this.#stopName(ph.stopIdx), remainS: Math.max(0, ph.t1 - el) };
       if (this.simAirports && this._shownStop !== ph.stopIdx) {
-        this._shownStop = ph.stopIdx; // replay boarding once, when we first reach this airport
-        this.#airportBoarding(ph.stopIdx);
+        this._shownStop = ph.stopIdx; // once, when we first reach this airport
+        this.#airportStop(ph.stopIdx, ph.t1);
       }
     } else if (ph) {
       const f = ph.t1 > ph.t0 ? Math.min(1, (el - ph.t0) / (ph.t1 - ph.t0)) : 1;
