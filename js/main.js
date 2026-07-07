@@ -20,7 +20,7 @@ const HOME = { lat: 45, lng: 15, dist: 2.85 };
 const loadStatus = document.getElementById('load-status');
 const loadBar = document.getElementById('load-bar');
 let loadedItems = 0;
-const TOTAL_ITEMS = 4;
+const TOTAL_ITEMS = 3;
 function bumpProgress(label) {
   loadedItems++;
   loadBar.style.width = `${(loadedItems / TOTAL_ITEMS) * 100}%`;
@@ -55,8 +55,7 @@ async function boot() {
   renderer.setClearColor(0x04060d);
 
   const texLoader = new THREE.TextureLoader();
-  const [day, clouds, places, aircraftList] = await Promise.all([
-    loadTexture(texLoader, 'assets/textures/earth_day_8k.jpg', 'Painting the continents…'),
+  const [clouds, places, aircraftList] = await Promise.all([
     loadTexture(texLoader, 'assets/textures/earth_clouds_4k.jpg', 'Seeding the clouds…'),
     loadJSON('data/places.json', 'Reading the atlas…'),
     loadJSON('data/aircraft.json', 'Rolling out the fleet…'),
@@ -64,7 +63,7 @@ async function boot() {
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.01, 130);
-  const globe = buildGlobe(scene, { day, clouds }, renderer.capabilities.getMaxAnisotropy());
+  const globe = buildGlobe(scene, { clouds }, renderer.capabilities.getMaxAnisotropy());
   const controls = new GlobeControls(camera, canvas);
   const pins = new PinManager(scene, document.getElementById('labels'));
   const route = new FlightRoute(scene);

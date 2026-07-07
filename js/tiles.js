@@ -1,20 +1,22 @@
 // The globe surface: high-res Esri World Imagery satellite tiles draped on the
-// sphere. A coverage grid blankets the whole visible cap so the globe is always
-// satellite; a second high-zoom detail patch loads around the look point for
-// street-level resolution as you close in. Streams when online; offline the base
-// satellite sphere shows through (poles always do — Web-Mercator stops at ±85°).
+// sphere — the only surface (there is no baked base texture). Three layers keep
+// it smooth: a whole-world base loaded once and never dropped (so there's always
+// full coverage, no blank pop-in), a coverage grid spanning the visible cap, and
+// a high-zoom detail patch around the look point. Online only; the plain base
+// sphere shows at the poles (Web-Mercator stops at ±85°) and before tiles load.
 import * as THREE from '../vendor/three/three.module.js';
 import { latLngToVec3 } from './geo.js';
 
 // Esri World Imagery: keyless high-res satellite (note the z/y/x order).
 const TILE_URL = (z, x, y) =>
   `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`;
+const BASE_Z = 3;         // whole-world base layer, loaded once and kept forever
 const COV_GRID = 3;       // coverage: 7x7 tiles blanket the whole visible cap
-const DET_GRID = 2;       // detail: a 5x5 high-zoom patch around the look point
+const DET_GRID = 3;       // detail: 7x7 high-zoom patch, pre-rendered wide
 const PATCH = 8;          // mesh subdivisions per tile (for sphere curvature)
-const R_COV = 1.0025;     // coverage shell: clear of the base sphere (no limb z-fight)
-const R_DET = 1.004;      // detail shell: above coverage so crisp tiles win
-const MIN_Z = 2;
+const R_BASE = 1.0008;    // persistent world base, just above the plain sphere
+const R_COV = 1.0016;     // coverage shell, above the base
+const R_DET = 1.0026;     // detail shell, above coverage so crisp tiles win
 const COV_MAX_Z = 7;      // coverage stays bounded; the detail patch carries resolution
 const MAX_Z = 19;
 
@@ -80,11 +82,11 @@ export class TileLayer {
     return new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: tex }));
   }
 
-  #load(z, x, y, radius) {
+  #load(z, x, y, radius, persistent = false) {
     const key = `${z}/${x}/${y}`;
     if (this.cache.has(key)) { this.cache.get(key).keep = true; return; }
     if (this.failed.has(key)) return;
-    const entry = { mesh: null, keep: true };
+    const entry = { mesh: null, keep: true, persistent };
     this.cache.set(key, entry);
     this.loader.load(TILE_URL(z, x, y), (tex) => {
       // identity check: the cache may hold a NEWER entry for this key by now
@@ -114,6 +116,16 @@ export class TileLayer {
     this.failed.clear(); // transient network errors get another chance next visit
     this.active = false;
     this.lastKey = '';
+    this._baseDone = false;
+  }
+
+  // a coarse whole-world layer loaded once and kept forever, so there's always
+  // full tile coverage under the finer layers — no blank flashes while panning.
+  #ensureBase() {
+    if (this._baseDone) return;
+    this._baseDone = true;
+    const max = 1 << BASE_Z;
+    for (let x = 0; x < max; x++) for (let y = 0; y < max; y++) this.#load(BASE_Z, x, y, R_BASE, true);
   }
 
   // load a (2*grid+1)^2 block of tiles around a center tile, at a given radius
@@ -133,6 +145,7 @@ export class TileLayer {
       if (this.active || this.cache.size) this.#clear();
       return;
     }
+    this.#ensureBase();
     const altKm = (dist - 1) * 6371;
     const c = camera.position.clone().normalize();
     const lat = clampLat(90 - Math.acos(THREE.MathUtils.clamp(c.y, -1, 1)) * 180 / Math.PI);
@@ -142,7 +155,7 @@ export class TileLayer {
     // globe is always fully satellite. Detail tier: altitude-based deep zoom around
     // the look point, layered on top for street-level crispness when it beats coverage.
     const capFullDeg = 2 * Math.acos(THREE.MathUtils.clamp(1 / dist, 0, 1)) * 180 / Math.PI;
-    const zc = THREE.MathUtils.clamp(Math.floor(Math.log2(360 * (2 * COV_GRID + 1) / Math.max(18, capFullDeg))), MIN_Z, COV_MAX_Z);
+    const zc = THREE.MathUtils.clamp(Math.floor(Math.log2(360 * (2 * COV_GRID + 1) / Math.max(18, capFullDeg))), BASE_Z, COV_MAX_Z);
     const zd = this.#zoomFor(altKm);
     const wantDetail = zd > zc;
     const cxc = lon2tile(lng, zc), cyc = lat2tile(lat, zc);
@@ -156,7 +169,7 @@ export class TileLayer {
     this.#loadGrid(zc, cxc, cyc, COV_GRID, R_COV);
     if (wantDetail) this.#loadGrid(zd, cxd, cyd, DET_GRID, R_DET);
     for (const [k, e] of [...this.cache.entries()]) {
-      if (e.keep) continue;
+      if (e.keep || e.persistent) continue;
       this.#drop(e);
       this.cache.delete(k);
     }

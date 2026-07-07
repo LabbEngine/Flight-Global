@@ -428,7 +428,7 @@ export class FlightSim {
     this.camera.updateProjectionMatrix();
   }
 
-  zoomBy(f) { this.followZoom = THREE.MathUtils.clamp(this.followZoom * f, 0.4, 3.4); }
+  zoomBy(f) { this.followZoom = THREE.MathUtils.clamp(this.followZoom * f, 0.2, 3.4); } // 0.2 = zoom in twice as close
 
   // ---------- dashboard ----------
   #buildDashboard() {

@@ -184,22 +184,14 @@ function makeStars() {
 }
 
 export function buildGlobe(scene, textures, maxAnisotropy) {
-  textures.day.anisotropy = maxAnisotropy;
-  textures.day.colorSpace = THREE.NoColorSpace;
-
   const earthGeo = new THREE.SphereGeometry(1, 128, 128);
   const uniforms = {
-    dayMap: { value: textures.day },
-    detailMap: { value: makeDetailTexture() },
-    detailAmt: { value: 0 },
     uBrightness: { value: 1 },
-    uDaylit: { value: 1 }, // globe is fully daylit so the flight dimming is visible
     sunDir: { value: new THREE.Vector3(1, 0, 0) },
   };
-  const earth = new THREE.Mesh(
-    earthGeo,
-    new THREE.ShaderMaterial({ uniforms, vertexShader: EARTH_VERT, fragmentShader: EARTH_FRAG })
-  );
+  // No baked Earth texture — the satellite tile layer is the only surface. This
+  // plain sphere is just a backdrop for the poles and the first-load frame.
+  const earth = new THREE.Mesh(earthGeo, new THREE.MeshBasicMaterial({ color: 0x0e2136 }));
   scene.add(earth);
 
   // clouds: the texture is white-on-black, so it doubles as its own alpha
@@ -255,7 +247,6 @@ export function buildGlobe(scene, textures, maxAnisotropy) {
       // descend below the cloud deck: clouds fade out, terrain grain fades in
       clouds.material.opacity = 0.75 * THREE.MathUtils.smoothstep(altitude, 0.05, 0.17) * uniforms.uBrightness.value;
       clouds.visible = clouds.material.opacity > 0.01;
-      uniforms.detailAmt.value = 0.8 * (1 - THREE.MathUtils.smoothstep(altitude, 0.03, 0.65));
       sunTimer += dt;
       if (sunTimer > 30) { // terminator creeps in real time
         sunTimer = 0;
