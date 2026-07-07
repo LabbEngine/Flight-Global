@@ -15,6 +15,12 @@ import { CapitalLabels } from './capitals.js';
 import { TIERS, tierFor, tierProgress, addFlight } from './membership.js';
 import { initUI } from './ui.js';
 
+// Persistent tile/app cache (see sw.js) so the map remembers what it has drawn
+// and doesn't re-fetch it every visit; also lets seen areas work offline.
+if ('serviceWorker' in navigator) {
+  addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+
 const HOME = { lat: 45, lng: 15, dist: 2.85 };
 
 const loadStatus = document.getElementById('load-status');
