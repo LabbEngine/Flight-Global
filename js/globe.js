@@ -244,6 +244,7 @@ export function buildGlobe(scene, textures, maxAnisotropy) {
   let sunTimer = 0;
   return {
     earth, clouds,
+    get brightness() { return uniforms.uBrightness.value; },
     setSun,
     // Tween the whole globe's brightness (used to dim the map once a flight starts).
     setBrightness(v, dur = 1) {

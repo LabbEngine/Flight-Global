@@ -41,6 +41,13 @@ export class TileLayer {
     this.active = false;
     this.enabled = true;
     this.lastKey = '';
+    this.brightness = 1; // multiplied into each tile so they dim with the globe in flight
+  }
+
+  setBrightness(v) {
+    if (v === this.brightness) return;
+    this.brightness = v;
+    for (const e of this.cache.values()) if (e.mesh) e.mesh.material.color.setScalar(v);
   }
 
   #zoomFor(altKm) {
@@ -85,6 +92,7 @@ export class TileLayer {
       tex.colorSpace = THREE.SRGBColorSpace;
       tex.anisotropy = 8;
       entry.mesh = this.#buildPatch(z, x, y, tex, radius);
+      entry.mesh.material.color.setScalar(this.brightness); // match the current globe dimming
       this.group.add(entry.mesh);
     }, undefined, () => {
       if (this.cache.get(key) === entry) this.cache.delete(key);
