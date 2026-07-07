@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FlyCool</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Crect width='20' height='20' rx='4.5' fill='%230d1322'/%3E%3Ccircle cx='10' cy='10' r='6.6' fill='none' stroke='%236fb0dd' stroke-width='1.1'/%3E%3Cpath d='M3.4 10h13.2' stroke='%236fb0dd' stroke-width='0.9'/%3E%3Cpath d='M10 3.4a10 10 0 0 1 0 13.2M10 3.4a10 10 0 0 0 0 13.2' fill='none' stroke='%236fb0dd' stroke-width='0.9'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <canvas id="globe-canvas"></canvas>
+  <div id="labels" aria-hidden="true"></div>
+
+  <!-- collapsible left sidebar -->
+  <nav class="hud sidebar" id="sidebar">
+    <button class="side-brand" id="side-toggle" aria-label="Expand or collapse the menu" aria-expanded="false">
+      <span class="side-mark">
+        <svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M2 10h16" stroke="currentColor" stroke-width="1.2"/><path d="M10 2a12 12 0 0 1 0 16M10 2a12 12 0 0 0 0 16" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>
+      </span>
+      <span class="side-word">Fly<b>Cool</b></span>
+    </button>
+    <div class="side-nav" id="side-nav">
+      <span class="side-eyebrow">Menu</span>
+      <span class="side-indicator" id="side-indicator" aria-hidden="true"></span>
+      <button class="side-item is-active" id="side-flights" aria-label="Flights">
+        <span class="side-ic"><svg viewBox="0 0 16 16"><path d="M8 1.5c.5 0 .9.4.9.9v4.1l5.6 3.2v1.6L8.9 9.6v3l1.6 1.2v1.2L8 14.4 5.5 15v-1.2L7.1 12.6v-3L1.5 11.3V9.7l5.6-3.2V2.4c0-.5.4-.9.9-.9z" fill="currentColor"/></svg></span>
+        <span class="side-label">Flights</span>
+      </button>
+      <button class="side-item" id="side-locate" aria-label="My location">
+        <span class="side-ic"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="4.6" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="10" cy="10" r="1.4" fill="currentColor"/><path d="M10 1.5v3M10 15.5v3M1.5 10h3M15.5 10h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+        <span class="side-label">My location</span>
+      </button>
+      <button class="side-item" id="side-reset" aria-label="Reset">
+        <span class="side-ic"><svg viewBox="0 0 20 20"><path d="M4 8a6.5 6.5 0 1 1-.5 4.5M4 3.5V8h4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="side-label">Reset</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- loading curtain -->
+  <div id="loading">
+    <div class="load-brand">
+      <svg viewBox="0 0 20 20" width="40" height="40"><circle cx="10" cy="10" r="8" fill="none" stroke="#6fb0dd" stroke-width="1.2" opacity="0.85"/><path d="M2 10h16" stroke="#6fb0dd" stroke-width="1" opacity="0.85"/><path d="M10 2a12 12 0 0 1 0 16M10 2a12 12 0 0 0 0 16" fill="none" stroke="#6fb0dd" stroke-width="1" opacity="0.85"/></svg>
+      <div class="load-name">Fly<span>Cool</span></div>
+    </div>
+    <div class="load-track"><div id="load-bar"></div></div>
+    <div id="load-status">Warming up the engines…</div>
+  </div>
+
+  <!-- top left: search + planner -->
+  <div class="hud hud-top-left">
+    <div class="search-box glass">
+      <svg class="icon" viewBox="0 0 20 20"><circle cx="9" cy="9" r="5.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m13.5 13.5 3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      <input id="search-input" type="text" placeholder="Search cities, airports, landmarks…"
+             autocomplete="off" spellcheck="false">
+      <kbd>/</kbd>
+    </div>
+    <div id="search-results" class="glass" hidden></div>
+    <div id="place-card" class="glass" hidden></div>
+
+    <div class="planner glass" id="planner" hidden>
+      <div class="planner-rows">
+        <button class="slot" id="origin-slot" type="button"></button>
+        <button class="swap" id="swap-btn" type="button" title="Swap origin and destination">
+          <svg viewBox="0 0 16 16"><path d="M5 2.5 2 5.5l3 3M2 5.5h9M11 13.5l3-3-3-3M14 10.5H5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button class="slot" id="dest-slot" type="button"></button>
+      </div>
+      <div class="planner-field">
+        <span class="field-label">Aircraft</span>
+        <div class="ac-picker" id="ac-picker">
+          <button class="ac-current" id="ac-current" type="button" aria-haspopup="listbox" aria-expanded="false"></button>
+          <div class="ac-menu glass" id="ac-menu" role="listbox" hidden></div>
+        </div>
+      </div>
+      <div class="planner-field">
+        <label for="departure-input">Departure · origin local time</label>
+        <input id="departure-input" type="datetime-local">
+      </div>
+      <button class="btn btn--primary" id="calc-btn" type="button" disabled>
+        <svg class="icon" viewBox="0 0 16 16"><path d="M8 1.5c.5 0 .9.4.9.9v4.1l5.6 3.2v1.6L8.9 9.6v3l1.6 1.2v1.2L8 14.4 5.5 15v-1.2L7.1 12.6v-3L1.5 11.3V9.7l5.6-3.2V2.4c0-.5.4-.9.9-.9z" fill="currentColor"/></svg>
+        Calculate flight
+      </button>
+    </div>
+  </div>
+
+  <!-- top right -->
+  <div class="hud hud-top-right">
+    <div class="clock" id="se-clock" title="Local time in Sweden">
+      <svg class="icon" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 4.8V8l2.2 1.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span id="se-clock-time">--:--</span>
+      <span class="clock-label">SWE</span>
+    </div>
+    <button class="ctl" id="theme-btn" title="Glass tone">
+      <svg viewBox="0 0 20 20"><path class="sun" d="M10 5.5a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9zM10 1v2M10 17v2M1 10h2M17 10h2M3.6 3.6l1.4 1.4M15 15l1.4 1.4M16.4 3.6 15 5M5 15l-1.4 1.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+    </button>
+    <button class="ctl" id="reset-btn" title="Reset everything">
+      <svg viewBox="0 0 20 20"><path d="M4 8a6.5 6.5 0 1 1-.5 4.5M4 3.5V8h4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <button class="ctl" id="fs-btn" title="Fullscreen">
+      <svg viewBox="0 0 20 20"><path d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  </div>
+
+  <!-- bottom right -->
+  <div class="hud hud-bottom-right">
+    <button class="ctl" id="zoom-in" title="Zoom in">
+      <svg viewBox="0 0 20 20"><path d="M10 4.5v11M4.5 10h11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+    </button>
+    <button class="ctl" id="zoom-out" title="Zoom out">
+      <svg viewBox="0 0 20 20"><path d="M4.5 10h11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+    </button>
+    <button class="ctl" id="home-btn" title="Fly to my location">
+      <svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="4.6" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="10" cy="10" r="1.4" fill="currentColor"/><path d="M10 1.5v3M10 15.5v3M1.5 10h3M15.5 10h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+    </button>
+    <div class="ctl compass" id="compass" title="Point north up">
+      <svg viewBox="0 0 44 44">
+        <circle cx="22" cy="22" r="19" fill="none" stroke="currentColor" stroke-width="1" opacity="0.35"/>
+        <g stroke="currentColor" opacity="0.45" stroke-linecap="round">
+          <path d="M22 3v4M22 37v4M3 22h4M37 22h4"/>
+        </g>
+        <g id="compass-rose">
+          <path d="M22 9.5l3.1 12.5L22 34.5l-3.1-12.5z" fill="currentColor" opacity="0.2"/>
+          <path d="M22 9.5l3.1 12.5h-6.2z" fill="#ff6b6b"/>
+          <circle cx="22" cy="22" r="1.6" fill="currentColor" opacity="0.7"/>
+        </g>
+      </svg>
+    </div>
+  </div>
+
+  <!-- bottom left telemetry -->
+  <div class="hud hud-bottom-left">
+    <span id="coords">—</span>
+    <span class="sep">·</span>
+    <span id="fps">— fps</span>
+  </div>
+
+  <div id="tile-attrib" hidden>Imagery © Esri, Maxar, Earthstar Geographics</div>
+
+  <!-- bottom center: flight dashboard -->
+  <div id="info-panel" class="glass" hidden>
+    <div id="info-body"></div>
+  </div>
+
+  <div id="context-card" class="glass" hidden></div>
+  <div id="boarding" hidden></div>
+  <div id="board-queue" hidden></div>
+  <div id="sim-dash" class="glass" hidden></div>
+  <div id="toast" class="glass" hidden></div>
+
+  <script src="vendor/gsap/gsap.min.js"></script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
