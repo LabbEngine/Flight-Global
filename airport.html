@@ -266,14 +266,9 @@ for (const x of [58,60,62,64,66,68,70]) for (const y of [4,6,8,15,17,19]) LOUNGE
 // ============================================================ SEATS
 function buildSeats(){
   const s=[]; const add=(tx,ty,label,cls)=>s.push({tx,ty,label,cls,cx:tx*TILE+TILE/2,cy:ty*TILE+TILE/2,taken:null});
-  // Business — 4 roomy rows, 2+2, spaced 2 tiles apart
-  [99,101,103,105].forEach((x,i)=>{ const r=i+1;
-    add(x,10,r+"A","business"); add(x,11,r+"C","business");   // left pair
-    add(x,13,r+"D","business"); add(x,14,r+"F","business");   // right pair
-  });
-  // (x106,107 left empty as a galley / gap between the classes)
-  // Economy — 24 rows, 3+3
-  for(let i=0;i<24;i++){ const x=108+i, r=5+i;
+  // 30 rows, 3-3 (A B C · aisle · D E F) — identical to FlightGlobe's seat map, so
+  // the seat you picked before boarding is the exact same seat here.
+  for(let i=0;i<30;i++){ const x=100+i, r=i+1;
     add(x,9,r+"A","economy"); add(x,10,r+"B","economy"); add(x,11,r+"C","economy");
     add(x,13,r+"D","economy"); add(x,14,r+"E","economy"); add(x,15,r+"F","economy");
   }
@@ -979,9 +974,6 @@ function chair(tx,ty){ const x=tx*TILE,y=ty*TILE; ctx.fillStyle="rgba(0,0,0,.1)"
 function planter(tx,ty){ const x=tx*TILE+TILE/2,y=ty*TILE+TILE/2; ctx.fillStyle="#5a4632"; ctx.beginPath(); ctx.arc(x,y+4,9,0,7); ctx.fill();
   ctx.fillStyle="#3f7a44"; for(const a of[0,2,4]){ ctx.beginPath(); ctx.arc(x+Math.cos(a)*5,y-3+Math.sin(a)*4,7,0,7); ctx.fill(); } }
 function drawSeats(now){
-  // class divider between business (≤x105) and economy (≥x108)
-  ctx.fillStyle="rgba(255,255,255,.06)"; ctx.fillRect(106*TILE, CBY0*TILE, TILE, (CBY1-CBY0+1)*TILE);
-  ctx.strokeStyle="rgba(47,122,214,.25)"; ctx.lineWidth=2; ctx.strokeRect(106*TILE+3, CBY0*TILE+4, TILE-6, (CBY1-CBY0+1)*TILE-8);
   for(const s of SEATS){ const x=s.tx*TILE,y=s.ty*TILE; const assigned = world.player.seat && s.label===world.player.seat.label;
     const biz = s.cls==="business";
     const pad = biz ? 2 : 4;                                  // business seats are wider/plusher
