@@ -17,26 +17,44 @@ There is no build step and no backend. The repository is the whole application.
 
 ## Getting started
 
-The application is a set of static files. You only need Python 3 to serve them locally — no Git, no build tools, and no dependency installation.
+FocusAir is a set of static files served locally by Python 3. There is no Git, no build step, and nothing to install — Python 3 is the only requirement, and recent versions of macOS already include it.
 
-### Download and run
+### 1. Download the app
 
 1. Open the repository on GitHub: <https://github.com/LabbEngine/Flight-Global>.
 2. Click the green **Code** button, then **Download ZIP**.
-3. Unzip the downloaded file. This produces a folder named `Flight-Global-main`; move it to your Desktop (or anywhere convenient) and open it.
-4. Open a terminal inside that folder:
-   - **macOS:** right-click the folder in Finder and choose *New Terminal at Folder*, or run `cd ~/Desktop/Flight-Global-main`.
-   - **Windows:** open the folder in File Explorer, type `cmd` in the address bar, and press Enter.
-   - **Linux:** right-click inside the folder and choose *Open Terminal*, or `cd` into it.
-5. Start the server:
+3. Unzip the file. This produces a folder named `Flight-Global-main`; move it to your Desktop.
 
-   ```bash
-   python run.py
-   ```
+### 2. Start it — the easy way (no terminal)
 
-   If `python` is not found, use `python3 run.py`.
+Open the folder and double-click the launcher for your system:
 
-Your browser opens automatically at <http://localhost:8003>. Stop the server with `Ctrl+C` in the terminal.
+- **macOS:** double-click **`run.command`**. The first time, macOS may block it because the file came from the internet — if so, **right-click `run.command`, choose *Open*, then click *Open* again**. You only do this once.
+- **Windows:** double-click **`run.bat`**.
+
+A small window opens and your browser launches at <http://localhost:8003>. Leave that window open while you fly; close it (or press `Ctrl+C`) to stop.
+
+The launcher finds Python 3 for you, so you never have to know whether it is called `python` or `python3`.
+
+### 3. Or start it from a terminal
+
+Prefer the terminal, or the launcher was blocked? Open one inside the folder:
+
+- **macOS:** right-click the folder in Finder and choose *New Terminal at Folder*, or run `cd ~/Desktop/Flight-Global-main`.
+- **Windows:** open the folder in File Explorer, type `cmd` in the address bar, and press Enter.
+- **Linux:** right-click inside the folder and choose *Open Terminal*, or `cd` into it.
+
+Then start the server:
+
+```bash
+python3 run.py
+```
+
+On Windows, use `python run.py` (or `py run.py`). Your browser opens at <http://localhost:8003>; stop the server with `Ctrl+C`.
+
+> **Getting `command not found`?** Python 3 isn't installed yet. On macOS, the built-in command is `python3`, never `python`, so `python run.py` will always fail — use `python3`.
+> - **macOS:** run `xcode-select --install`, click *Install*, wait for it to finish, then try again. This installs Apple's command-line tools, which include Python 3.
+> - **Windows / Linux:** install Python 3 from <https://www.python.org/downloads/>; on Windows, tick *Add Python to PATH* during setup.
 
 `run.py` is a small static file server; it exists only because browsers refuse to load the textures and JSON data over `file://`, so the files must be served over `localhost`. Nothing else is installed: Three.js and GSAP are vendored under `vendor/`, and all textures and data are committed.
 
@@ -45,7 +63,7 @@ Your browser opens automatically at <http://localhost:8003>. Stop the server wit
 ```bash
 git clone https://github.com/LabbEngine/Flight-Global.git
 cd Flight-Global
-python run.py
+python3 run.py
 ```
 
 ## Features
@@ -85,6 +103,8 @@ During a flight, switch between the Top, Trip, Behind, and Cabin cameras from th
 ```
 index.html            markup and HUD
 run.py                static file server and browser launch
+run.command           double-click launcher (macOS)
+run.bat               double-click launcher (Windows)
 css/style.css         styling
 js/
   main.js             boot, application state, render loop
