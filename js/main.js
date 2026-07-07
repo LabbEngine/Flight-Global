@@ -487,7 +487,7 @@ async function boot() {
     globe.update(dt, altitude);
     route.update(dt, camera);
     sim.updateCamera(); // chase cam needs the freshly-positioned plane
-    tiles.enabled = true; // OSM tiles are the globe surface now — always on
+    tiles.enabled = !sim.busy; // satellite tiles off during a flight (dim base reads better)
     tiles.update(camera);
     tileAttrib.hidden = !tiles.active;
     pins.update(camera, innerWidth, innerHeight);

@@ -4,7 +4,7 @@
 import * as THREE from '../vendor/three/three.module.js';
 import { latLngToVec3, vec3ToLatLng, raySphere, DEG } from './geo.js';
 
-const MIN_DIST = 1.025; // ~160 km altitude - detail layer keeps it crisp
+const MIN_DIST = 1.006; // ~40 km altitude - close enough for street-level satellite tiles
 const MAX_DIST = 6.5;
 const IDLE_SECONDS = 25;
 
