@@ -391,8 +391,6 @@ export function initUI(app) {
     els.searchInput.focus();
   }
   $('side-flights').addEventListener('click', () => { setActive($('side-flights')); openFlightSearch(); });
-  $('side-locate').addEventListener('click', () => { setActive($('side-locate')); app.goToMyLocation(); });
-  $('side-reset').addEventListener('click', () => { setActive($('side-reset')); app.resetAll(); toast('Everything reset'); });
 
   // ---------- telemetry ----------
   function setCoords(ll, altKm) {
