@@ -5,12 +5,9 @@
 import * as THREE from '../vendor/three/three.module.js';
 import { formatInTz, tzAbbr, formatDuration } from './flight.js';
 import { latLngToVec3, vec3ToLatLng } from './geo.js';
+import { CabinView, ROWS } from './cabin.js';
+import { tierFor } from './membership.js';
 
-const SEAT_ROWS = 8;
-const SEAT_LAYOUTS = {
-  b789: ['ABC', 'DEF', 'GHJ'], b77w: ['ABC', 'DEFG', 'HJK'],
-  a359: ['ABC', 'DEF', 'GHJ'], a339: ['AB', 'CDEF', 'GH'],
-};
 const TIMERS = [
   { s: 60, label: '1 min' }, { s: 300, label: '5 min' }, { s: 900, label: '15 min' },
   { s: 1500, label: '25 min' }, { s: 2700, label: '45 min' },
@@ -44,13 +41,16 @@ export class FlightSim {
     this.landed = false;
     this.followZoom = 1;
     this.camMode = 'top';
-    this.orbitYaw = 0; // Behind-mode orbit around the plane (0 = directly behind)
+    this.orbitYaw = 0; // Behind-view drag: swing around the plane (0 = directly behind)
     this.orbitPitch = 0;
-    this.wallDurationS = DEFAULT_TIMER;
+    this.tripMinutes = 15; this.layoverMinutes = 5; // set from the planner when you board
     this.boardingEl = document.getElementById('boarding');
     this.dashEl = document.getElementById('sim-dash');
+    this.cabinEl = document.getElementById('cabin-view');
+    this.cabin = new CabinView(this.cabinEl); // first-person window-seat scene (lazy WebGL)
+    this.cabin.onExit = () => this.setCamMode('full'); // "Earth view" button → back to the globe
     canvas.addEventListener('wheel', (e) => {
-      if (this.inFlight && this.camMode !== 'full') this.zoomBy(Math.exp(e.deltaY * 0.0014));
+      if (this.inFlight && this.camMode !== 'full' && this.camMode !== 'cabin') this.zoomBy(Math.exp(e.deltaY * 0.0014));
     }, { passive: true });
     // drag to swing the camera around the aircraft while in Behind view
     let dragging = false, px = 0, py = 0;
@@ -73,7 +73,8 @@ export class FlightSim {
     if (!this.boardingEl.hidden) return; // already boarding — don't wipe the seat pick
     this.ctx = ctx;
     this.seat = null;
-    this.wallDurationS = DEFAULT_TIMER;
+    this.tripMinutes = ctx.tripMinutes || 15;
+    this.layoverMinutes = ctx.layoverMinutes || 5;
     const { origin, dest, aircraft } = ctx;
     // real airport call signs (e.g. ARN, HND) — supplied by main from the atlas
     this.originCode = ctx.originCode || (origin.iata || origin.name.slice(0, 3)).toUpperCase();
@@ -88,7 +89,7 @@ export class FlightSim {
     this.boardingEl.innerHTML = `
       <div class="boarding-card glass">
         <button class="card-close" id="bp-close" title="Not today">×</button>
-        <div class="bp-eyebrow">Boarding pass</div>
+        <div class="bp-eyebrow">Boarding pass<span class="bp-tier" style="--tc:${tierFor().color}">${tierFor().name}</span></div>
         <div class="bp">
           <div class="bp-route">
             <div><div class="bp-code">${this.originCode}</div><div class="bp-city">${origin.name}</div></div>
@@ -107,19 +108,10 @@ export class FlightSim {
         </div>
         <div class="bp-seats-title">Choose your seat</div>
         <div class="seat-map" id="seat-map"></div>
-        <div class="bp-seats-title">Flight length · sets how long the trip plays</div>
-        <div class="timer-chips" id="timer-chips">
-          ${TIMERS.map((t) => `<button class="timer-chip${t.s === this.wallDurationS ? ' is-on' : ''}" type="button" data-s="${t.s}">${t.label}</button>`).join('')}
-        </div>
+        <div class="bp-trip">${this.#tripSummary()}</div>
         <button class="btn btn--primary" id="bp-board" disabled>Pick a seat to board</button>
       </div>`;
-    this.#buildSeatMap(aircraft);
-    for (const chip of this.boardingEl.querySelectorAll('.timer-chip')) {
-      chip.onclick = () => {
-        this.wallDurationS = +chip.dataset.s;
-        for (const c of this.boardingEl.querySelectorAll('.timer-chip')) c.classList.toggle('is-on', c === chip);
-      };
-    }
+    this.#buildSeatMap();
     this.boardingEl.hidden = false;
     gsap.fromTo(this.boardingEl.firstElementChild, { opacity: 0, y: 24, scale: 0.97 },
       { opacity: 1, y: 0, scale: 1, duration: 0.45, ease: 'power3.out' });
@@ -136,27 +128,27 @@ export class FlightSim {
     if (this.seat) this.#startBoarding();
   }
 
-  #buildSeatMap(aircraft) {
-    const layout = SEAT_LAYOUTS[aircraft.id] || SEAT_LAYOUTS.b789;
+  #buildSeatMap() {
     const map = document.getElementById('seat-map');
-    for (let r = 1; r <= SEAT_ROWS; r++) {
+    const groups = [['A', 'B', 'C'], ['D', 'E', 'F']]; // 3-3, matching the cabin
+    for (let r = 1; r <= ROWS; r++) {
       const row = document.createElement('div');
       row.className = 'seat-row';
-      row.innerHTML = `<span class="seat-rownum">${r + 11}</span>`;
-      layout.forEach((group, gi) => {
+      row.innerHTML = `<span class="seat-rownum">${r}</span>`;
+      groups.forEach((group, gi) => {
         const g = document.createElement('span');
         g.className = 'seat-group';
         for (const letter of group) {
           const seat = document.createElement('button');
           seat.type = 'button';
           seat.className = 'seat';
-          seat.dataset.id = `${r + 11}${letter}`;
-          if (Math.random() < 0.32) seat.classList.add('is-occ');
+          seat.dataset.id = `${r}${letter}`;
+          if (Math.random() < 0.3) seat.classList.add('is-occ');
           else seat.onclick = () => this.#pickSeat(seat);
           g.appendChild(seat);
         }
         row.appendChild(g);
-        if (gi < layout.length - 1) row.insertAdjacentHTML('beforeend', '<span class="seat-aisle"></span>');
+        if (gi < groups.length - 1) row.insertAdjacentHTML('beforeend', '<span class="seat-aisle"></span>');
       });
       map.appendChild(row);
     }
@@ -190,7 +182,16 @@ export class FlightSim {
   }
 
   #showBoardingQueue(onDone) {
-    const groups = ['Passengers needing assistance', 'First & Business', 'Sky Priority', 'Group 1', 'Group 2', 'Group 3'];
+    const tier = tierFor();
+    const groups = [
+      { name: 'Passengers needing assistance', tier: null },
+      { name: 'Premium · First to board', tier: 'premium' },
+      { name: 'Platinum · Sky Priority', tier: 'platinum' },
+      { name: 'Gold · Priority', tier: 'gold' },
+      { name: 'Silver · Main cabin', tier: 'silver' },
+      { name: 'General boarding', tier: null },
+    ];
+    const youIdx = Math.max(0, groups.findIndex((g) => g.tier === tier.key));
     const el = document.getElementById('board-queue');
     el.innerHTML = `
       <div class="bq-card glass">
@@ -198,9 +199,9 @@ export class FlightSim {
           <span class="bq-title">Now boarding</span>
           <span class="bq-flight">${this.flightNo} · Gate ${this.gate}</span>
         </div>
-        <div class="bq-sub">Please have your boarding pass ready</div>
+        <div class="bq-sub"><b style="color:${tier.color}">${tier.name} member</b> · you're in group ${youIdx + 1} of ${groups.length}</div>
         <div class="bq-list">
-          ${groups.map((g) => `<div class="bq-row"><span class="bq-dot"></span><span class="bq-name">${g}</span><span class="bq-check">✓</span></div>`).join('')}
+          ${groups.map((g, i) => `<div class="bq-row${i === youIdx ? ' is-you' : ''}"><span class="bq-dot"></span><span class="bq-name">${g.name}</span>${i === youIdx ? `<span class="bq-you" style="--tc:${tier.color}">YOU</span>` : '<span class="bq-check">✓</span>'}</div>`).join('')}
         </div>
         <div class="bq-bar"><span id="bq-fill"></span></div>
         <div class="bq-foot" id="bq-foot">Boarding…</div>
@@ -209,7 +210,8 @@ export class FlightSim {
     const card = el.firstElementChild;
     const rows = [...el.querySelectorAll('.bq-row')];
     gsap.set(rows, { opacity: 0, x: -14 });
-    const per = 0.95;
+    const per = 0.9;
+    const boardCount = youIdx + 1; // your group + everyone ahead — you don't wait for the rest
     const tl = gsap.timeline({
       onComplete: () => {
         gsap.to(card, { opacity: 0, scale: 0.95, duration: 0.45, ease: 'power2.in', onComplete: () => { el.hidden = true; } });
@@ -218,13 +220,14 @@ export class FlightSim {
     });
     tl.fromTo(card, { opacity: 0, y: 24, scale: 0.9 }, { opacity: 1, y: 0, scale: 1, duration: 0.6, ease: 'back.out(1.5)' });
     rows.forEach((row, i) => {
+      if (i > youIdx) { tl.to(row, { opacity: 0.45, x: 0, duration: 0.3 }, 0.5); return; } // still queued behind you
       const t = 0.5 + i * per;
       tl.to(row, { opacity: 1, x: 0, duration: 0.4, ease: 'power2.out', onStart: () => row.classList.add('is-boarding') }, t);
       tl.add(() => { row.classList.remove('is-boarding'); row.classList.add('is-done'); }, t + per * 0.62);
-      tl.to('#bq-fill', { width: `${((i + 1) / rows.length) * 100}%`, duration: per * 0.62, ease: 'power1.out' }, t);
+      tl.to('#bq-fill', { width: `${((i + 1) / boardCount) * 100}%`, duration: per * 0.62, ease: 'power1.out' }, t);
     });
-    tl.add(() => { const f = document.getElementById('bq-foot'); if (f) f.textContent = 'Boarding complete — cleared for pushback'; }, 0.5 + rows.length * per);
-    tl.to({}, { duration: 1.0 }); // hold on "boarding complete"
+    tl.add(() => { const f = document.getElementById('bq-foot'); if (f) f.textContent = "You're aboard — cleared for pushback"; }, 0.5 + boardCount * per);
+    tl.to({}, { duration: 0.9 });
     this.queueTl = tl;
   }
 
@@ -246,10 +249,12 @@ export class FlightSim {
     this.flightStartPerf = performance.now();
     this.totalKm = this.route.totalKm;
     this.realFlightH = this.totalKm / this.ctx.aircraft.cruiseSpeedKmh;
+    this.#buildJourney();
     this.followZoom = 1;
     this.camMode = 'top';
     this.orbitYaw = 0;
     this.orbitPitch = 0;
+    this.#hideCabin();
     this.route.enterSim();
     this.onStateChange(true);
     this.globe.setBrightness(0.46, 1.6);
@@ -269,26 +274,46 @@ export class FlightSim {
   }
 
   setCamMode(mode) {
-    if (mode === 'behind' && this.camMode === 'behind') { // re-click recenters the orbit
-      this.orbitYaw = 0; this.orbitPitch = 0;
-      this.#armBlend();
-      this.ui.toast('Recentered behind the plane');
+    if (mode === this.camMode) { // re-click recenters the Behind orbit / Cabin gaze
+      if (mode === 'behind' || mode === 'cabin') {
+        this.orbitYaw = 0; this.orbitPitch = 0;
+        this.#armBlend();
+        this.ui.toast(mode === 'cabin' ? 'Recentered your window view' : 'Recentered behind the plane');
+      }
       return;
     }
-    if (this.camMode === mode) return;
+    const leavingCabin = this.camMode === 'cabin';
     this.camMode = mode;
-    if (mode === 'behind') {
-      this.orbitYaw = 0; this.orbitPitch = 0;
-      this.ui.toast('Behind view · drag to look around, click Behind to recenter');
-    }
+    this.orbitYaw = 0; this.orbitPitch = 0;
+    if (leavingCabin) this.#setCabin(false);
+    if (mode === 'behind') this.ui.toast('Behind view · drag to look around, click Behind to recenter');
+    if (mode === 'cabin') { this.#setCabin(true); this.ui.toast('Window seat · drag to look around'); }
     this.#armBlend();
     for (const b of this.dashEl.querySelectorAll('.cam-mode')) b.classList.toggle('is-on', b.dataset.m === mode);
   }
 
-  #frac() {
-    if (this.flightStartPerf == null) return 0;
-    return Math.min(1, (performance.now() - this.flightStartPerf) / (this.wallDurationS * 1000));
+  // Build the real-time timeline: fly each leg for its share of the trip time,
+  // then wait `layoverMinutes` at each connecting airport before the next leg.
+  #buildJourney() {
+    const legs = this.route.legs || [];
+    const waitS = (this.layoverMinutes || 0) * 60;
+    const stops = Math.max(0, legs.length - 1);
+    const flyingS = Math.max(20, (this.tripMinutes || 15) * 60 - stops * waitS);
+    this.journey = [];
+    let t = 0;
+    for (let i = 0; i < legs.length; i++) {
+      const dur = this.totalKm > 0 ? flyingS * (legs[i].distKm / this.totalKm) : flyingS;
+      this.journey.push({ type: 'fly', t0: t, t1: t + dur, km0: legs[i].startKm, km1: legs[i].startKm + legs[i].distKm });
+      t += dur;
+      if (i < legs.length - 1) { this.journey.push({ type: 'stop', stopIdx: i, t0: t, t1: t + waitS, km: legs[i].startKm + legs[i].distKm }); t += waitS; }
+    }
+    this.journeyDurS = Math.max(1, t);
+    this.atStop = null;
   }
+  #stopName(i) { const s = this.ctx.flight?.stops?.[i]; return s ? (s.iata || s.name) : 'stop'; }
+
+  #elapsedS() { return this.flightStartPerf == null ? 0 : (performance.now() - this.flightStartPerf) / 1000; }
+  #frac() { return this.journeyDurS ? Math.min(1, this.#elapsedS() / this.journeyDurS) : 0; }
   simNow() { return new Date(this.takeoff.getTime() + this.#frac() * this.realFlightH * 3600000); }
 
   advance() {
@@ -299,9 +324,18 @@ export class FlightSim {
       return;
     }
     if (!this.inFlight || this.landed) return;
-    const frac = this.#frac();
-    this.route.setProgressKm(frac * this.totalKm);
-    if (frac >= 1) this.#land();
+    const el = this.#elapsedS();
+    let ph = this.journey[this.journey.length - 1];
+    for (const p of this.journey) { if (el < p.t1) { ph = p; break; } }
+    if (ph && ph.type === 'stop') {
+      this.route.setProgressKm(ph.km);
+      this.atStop = { name: this.#stopName(ph.stopIdx), remainS: Math.max(0, ph.t1 - el) };
+    } else if (ph) {
+      const f = ph.t1 > ph.t0 ? Math.min(1, (el - ph.t0) / (ph.t1 - ph.t0)) : 1;
+      this.route.setProgressKm(ph.km0 + (ph.km1 - ph.km0) * f);
+      this.atStop = null;
+    }
+    if (el >= this.journeyDurS) this.#land();
     if (performance.now() - this.lastDash > 250) {
       this.lastDash = performance.now();
       this.#refreshDashboard();
@@ -321,6 +355,7 @@ export class FlightSim {
 
   updateCamera() {
     if (!this.inFlight) return; // during finishing the user owns the camera
+    if (this.camMode === 'cabin') return; // Cabin is a DOM scene; the 3D camera sits idle
     let camPos, q;
     if (this.camMode === 'full') {
       ({ camPos, q } = this.#fullCam());
@@ -372,6 +407,7 @@ export class FlightSim {
         <button class="cam-mode is-on" data-m="top" type="button">Top</button>
         <button class="cam-mode" data-m="full" type="button">Trip</button>
         <button class="cam-mode" data-m="behind" type="button">Behind</button>
+        <button class="cam-mode" data-m="cabin" type="button">Cabin</button>
       </div>
       <div class="dash-audio">
         <svg class="dash-vol-icon" viewBox="0 0 16 16"><path d="M2 6h2.5L8 3v10L4.5 10H2z" fill="currentColor"/><path d="M10.5 5.5a3.3 3.3 0 0 1 0 5M12.4 3.6a6 6 0 0 1 0 8.8" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
@@ -395,7 +431,7 @@ export class FlightSim {
   #refreshDashboard() {
     const { dest, aircraft } = this.ctx;
     const frac = this.#frac();
-    const remWallS = Math.max(0, this.wallDurationS * (1 - frac));
+    const remWallS = Math.max(0, this.journeyDurS - this.#elapsedS());
     const now = this.landed ? this.landedAt : this.simNow();
     const arrival = this.landedAt || new Date(this.takeoff.getTime() + this.realFlightH * 3600000);
     const remKm = Math.max(0, (1 - frac) * this.totalKm);
@@ -404,18 +440,20 @@ export class FlightSim {
     const mm = Math.floor(remWallS / 60), ss = Math.floor(remWallS % 60);
     const timerEl = document.getElementById('dash-timer');
     if (timerEl) timerEl.textContent = this.landed ? 'Arrived' : `${mm}:${String(ss).padStart(2, '0')}`;
+    const atStop = this.atStop;
     const phase = this.landed ? { t: 'Landed', k: 'landed' }
+      : atStop ? { t: `Layover · ${atStop.name}`, k: 'lifting' }
       : frac < 0.05 ? { t: 'Lifting off', k: 'lifting' }
-      : frac > 0.9 ? { t: 'Landing', k: 'landing' }
+      : frac > 0.94 ? { t: 'Landing', k: 'landing' }
       : { t: 'En route', k: 'route' };
     const statusEl = document.getElementById('dash-status');
     if (statusEl) { statusEl.textContent = phase.t; statusEl.dataset.phase = phase.k; }
     document.getElementById('dash-fill').style.width = `${frac * 100}%`;
-    // live altitude: climb over the first stretch, cruise, then descend
+    // live altitude: on the ground during a layover, else climb / cruise / descend
     const cruiseFt = aircraft.cruiseAltitudeFt;
-    const altFt = frac < 0.08 ? cruiseFt * (frac / 0.08)
+    const altFt = atStop ? 0 : frac < 0.08 ? cruiseFt * (frac / 0.08)
       : frac > 0.92 ? cruiseFt * ((1 - frac) / 0.08) : cruiseFt;
-    const altSub = frac < 0.08 ? 'climbing' : frac > 0.92 ? 'descending' : `FL${Math.round(cruiseFt / 100)}`;
+    const altSub = atStop ? `on the ground · ${Math.ceil(atStop.remainS)}s` : frac < 0.08 ? 'climbing' : frac > 0.92 ? 'descending' : `FL${Math.round(cruiseFt / 100)}`;
     const cell = (l, v, s = '') =>
       `<div class="stat"><div class="stat-label">${l}</div><div class="stat-value stat-value--sm">${v}</div>${s ? `<div class="stat-sub">${s}</div>` : ''}</div>`;
     document.getElementById('dash-grid').innerHTML = this.landed
@@ -426,18 +464,57 @@ export class FlightSim {
         + cell('Remaining', formatDuration(remH), `${nf.format(remKm)} km to go`)
         + cell('Altitude', `${nf.format(Math.round(altFt / 500) * 500)} ft`, altSub)
         + cell('Cruise', `${nf.format(aircraft.cruiseSpeedKmh)} km/h`, `${aircraft.maxPassengers} seats`);
+    // feed the live seat-back data screen inside the cabin view
+    this.cabin?.setFlightData({
+      route: `${this.originCode} → ${this.destCode}`,
+      flightNo: this.flightNo,
+      status: phase.t,
+      timer: this.landed ? 'Arrived' : `${mm}:${String(ss).padStart(2, '0')}`,
+      alt: this.landed ? '—' : `${nf.format(Math.round(altFt / 500) * 500)} ft`,
+      eta: formatInTz(arrival, dest.tz),
+      etaZone: tzAbbr(arrival, dest.tz),
+      remaining: this.landed ? 'Arrived' : formatDuration(remH),
+      progress: frac,
+    });
   }
 
   #land() {
     if (this.landed) return;
     this.landed = true;
+    this.atStop = null;
     this.landedDurH = this.realFlightH;
     this.landedAt = new Date(this.takeoff.getTime() + this.realFlightH * 3600000);
     this.route.setProgressKm(this.totalKm);
     this.audio?.stopEngine();
+    this.#showArrival();
     this.ui.toast(`Welcome to ${this.ctx.dest.name} — seat ${this.seat}`);
     this.#refreshDashboard();
-    this.landTimer = gsap.delayedCall(5.5, () => this.finish());
+    this.landTimer = gsap.delayedCall(6, () => this.finish());
+  }
+
+  // the pop-in arrival card the moment the plane touches the destination
+  #showArrival() {
+    const el = document.getElementById('arrival-card');
+    if (!el) return;
+    const dest = this.ctx.dest;
+    el.innerHTML = `
+      <div class="arr-card glass">
+        <div class="arr-badge">✦ Arrived</div>
+        <div class="arr-city">${dest.name}</div>
+        <div class="arr-sub">${this.originCode} → ${this.destCode} · seat ${this.seat}</div>
+        <div class="arr-row"><span>Flight time</span><b>${formatDuration(this.landedDurH)}</b></div>
+        <div class="arr-row"><span>Arrived</span><b>${formatInTz(this.landedAt, dest.tz)} ${tzAbbr(this.landedAt, dest.tz)}</b></div>
+      </div>`;
+    el.hidden = false;
+    const card = el.firstElementChild;
+    gsap.fromTo(card, { opacity: 0, scale: 0.55, y: 24 }, { opacity: 1, scale: 1, y: 0, duration: 0.75, ease: 'back.out(1.7)' });
+    gsap.to(card, { opacity: 0, scale: 0.92, duration: 0.4, delay: 5.0, ease: 'power2.in', onComplete: () => { el.hidden = true; } });
+  }
+
+  #tripSummary() {
+    const stops = Math.max(0, (this.ctx.flight?.legs?.length || 1) - 1);
+    const stopTxt = stops ? ` · ${stops} stop${stops > 1 ? 's' : ''} × ${this.layoverMinutes} min wait` : ' · non-stop';
+    return `Plays over <b>${this.tripMinutes} min</b>${stopTxt}`;
   }
 
   // natural completion: deselect and ease from a close-up of the city out to space
@@ -447,6 +524,7 @@ export class FlightSim {
     const dest = this.ctx.dest;
     this.inFlight = false;
     this.dashEl.hidden = true;
+    this.#hideCabin();
     this.audio?.silence();
     this.globe.setBrightness(1, 1.8);
     this.route.exitSim();
@@ -475,6 +553,7 @@ export class FlightSim {
     this.finishing = true;
     this.inFlight = false;
     this.dashEl.hidden = true;
+    this.#hideCabin();
     // hand the camera to the user so they can look around while it finishes,
     // after a gentle glide out to frame the whole trip
     document.body.classList.remove('sim-on');
@@ -502,6 +581,14 @@ export class FlightSim {
     this.onExitDone?.(); // clear route (line disappears) + pins; camera stays with the user
   }
 
+  // ---------- first-person cabin (window seat) ----------
+  #setCabin(on) {
+    if (on) { this.dashEl.hidden = true; this.cabin?.enter(this.seat); }
+    else { this.dashEl.hidden = false; this.cabin?.exit(); }
+  }
+
+  #hideCabin() { this.cabin?.exit(); }
+
   // hard stop (used by global reset) — no animation
   kill() {
     this.landTimer?.kill();
@@ -511,6 +598,7 @@ export class FlightSim {
     this.finishing = false;
     this.takingOff = false;
     this.dashEl.hidden = true;
+    this.#hideCabin();
     this.closeBoarding();
     this.audio?.silence();
     this.globe.setBrightness(1, 0.4);

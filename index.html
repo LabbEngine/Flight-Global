@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FlyCool</title>
+  <title>FocusAir</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Crect width='20' height='20' rx='4.5' fill='%230d1322'/%3E%3Ccircle cx='10' cy='10' r='6.6' fill='none' stroke='%236fb0dd' stroke-width='1.1'/%3E%3Cpath d='M3.4 10h13.2' stroke='%236fb0dd' stroke-width='0.9'/%3E%3Cpath d='M10 3.4a10 10 0 0 1 0 13.2M10 3.4a10 10 0 0 0 0 13.2' fill='none' stroke='%236fb0dd' stroke-width='0.9'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="css/style.css">
 </head>
@@ -17,7 +17,7 @@
       <span class="side-mark">
         <svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M2 10h16" stroke="currentColor" stroke-width="1.2"/><path d="M10 2a12 12 0 0 1 0 16M10 2a12 12 0 0 0 0 16" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>
       </span>
-      <span class="side-word">Fly<b>Cool</b></span>
+      <span class="side-word">Focus<b>Air</b></span>
     </button>
     <div class="side-nav" id="side-nav">
       <span class="side-eyebrow">Menu</span>
@@ -26,14 +26,6 @@
         <span class="side-ic"><svg viewBox="0 0 16 16"><path d="M8 1.5c.5 0 .9.4.9.9v4.1l5.6 3.2v1.6L8.9 9.6v3l1.6 1.2v1.2L8 14.4 5.5 15v-1.2L7.1 12.6v-3L1.5 11.3V9.7l5.6-3.2V2.4c0-.5.4-.9.9-.9z" fill="currentColor"/></svg></span>
         <span class="side-label">Flights</span>
       </button>
-      <button class="side-item" id="side-locate" aria-label="My location">
-        <span class="side-ic"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="4.6" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="10" cy="10" r="1.4" fill="currentColor"/><path d="M10 1.5v3M10 15.5v3M1.5 10h3M15.5 10h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
-        <span class="side-label">My location</span>
-      </button>
-      <button class="side-item" id="side-reset" aria-label="Reset">
-        <span class="side-ic"><svg viewBox="0 0 20 20"><path d="M4 8a6.5 6.5 0 1 1-.5 4.5M4 3.5V8h4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-        <span class="side-label">Reset</span>
-      </button>
     </div>
   </nav>
 
@@ -41,7 +33,7 @@
   <div id="loading">
     <div class="load-brand">
       <svg viewBox="0 0 20 20" width="40" height="40"><circle cx="10" cy="10" r="8" fill="none" stroke="#6fb0dd" stroke-width="1.2" opacity="0.85"/><path d="M2 10h16" stroke="#6fb0dd" stroke-width="1" opacity="0.85"/><path d="M10 2a12 12 0 0 1 0 16M10 2a12 12 0 0 0 0 16" fill="none" stroke="#6fb0dd" stroke-width="1" opacity="0.85"/></svg>
-      <div class="load-name">Fly<span>Cool</span></div>
+      <div class="load-name">Focus<span>Air</span></div>
     </div>
     <div class="load-track"><div id="load-bar"></div></div>
     <div id="load-status">Warming up the engines…</div>
@@ -77,6 +69,23 @@
         <label for="departure-input">Departure · origin local time</label>
         <input id="departure-input" type="datetime-local">
       </div>
+      <div class="planner-field">
+        <label for="trip-min">Total trip · <b id="trip-min-val">15</b> min real time</label>
+        <input id="trip-min" class="trip-range" type="range" min="1" max="60" value="15" step="1">
+      </div>
+      <div class="planner-field">
+        <span class="field-label">Breaks · connecting airports</span>
+        <div class="break-chips" id="break-chips">
+          <button class="break-chip is-on" data-b="0" type="button">Non-stop</button>
+          <button class="break-chip" data-b="1" type="button">1</button>
+          <button class="break-chip" data-b="2" type="button">2</button>
+          <button class="break-chip" data-b="3" type="button">3</button>
+        </div>
+      </div>
+      <div class="planner-field" id="layover-field" hidden>
+        <label for="layover-min">Wait at each airport · <b id="layover-min-val">5</b> min</label>
+        <input id="layover-min" class="trip-range" type="range" min="1" max="20" value="5" step="1">
+      </div>
       <button class="btn btn--primary" id="calc-btn" type="button" disabled>
         <svg class="icon" viewBox="0 0 16 16"><path d="M8 1.5c.5 0 .9.4.9.9v4.1l5.6 3.2v1.6L8.9 9.6v3l1.6 1.2v1.2L8 14.4 5.5 15v-1.2L7.1 12.6v-3L1.5 11.3V9.7l5.6-3.2V2.4c0-.5.4-.9.9-.9z" fill="currentColor"/></svg>
         Calculate flight
@@ -86,6 +95,10 @@
 
   <!-- top right -->
   <div class="hud hud-top-right">
+    <button class="mem-chip glass" id="mem-chip" title="Your FocusAir membership">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.7l1.8 3.8 4.2.6-3 3 .7 4.2L8 11.9 4.3 13.3l.7-4.2-3-3 4.2-.6z" fill="currentColor"/></svg>
+      <span id="mem-tier">Silver</span>
+    </button>
     <div class="clock" id="se-clock" title="Local time in Sweden">
       <svg class="icon" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 4.8V8l2.2 1.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <span id="se-clock-time">--:--</span>
@@ -143,9 +156,12 @@
   </div>
 
   <div id="context-card" class="glass" hidden></div>
+  <div id="mem-card" class="glass" hidden></div>
+  <div id="arrival-card" hidden></div>
   <div id="boarding" hidden></div>
   <div id="board-queue" hidden></div>
   <div id="sim-dash" class="glass" hidden></div>
+  <div id="cabin-view" hidden aria-hidden="true"></div>
   <div id="toast" class="glass" hidden></div>
 
   <script src="vendor/gsap/gsap.min.js"></script>
