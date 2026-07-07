@@ -1,19 +1,21 @@
-# FlyCool 🌍✈️
+# FocusAir
 
-**A beautiful interactive 3D globe you can plan and fly imaginary flights on** — spin the Earth, pick a destination and an origin, board with a real boarding pass, and watch a little aircraft trace the great circle across the planet. It all runs in your browser on your own computer.
+A browser-based 3D flight visualiser and planner. Spin an interactive globe, plan a great-circle route with connecting stops, board the aircraft, and fly it from a live map view or a fully modelled first-person cabin. It is pure front end — HTML, CSS, and JavaScript with Three.js and GSAP — and runs entirely offline after cloning.
 
----
+## Overview
 
-## ▶ Run it (about 30 seconds)
+FocusAir renders an 8K daylit Earth with a custom GLSL shader, drifting clouds, an atmospheric rim, and a procedural star field. From there you plan a trip between any two points, control its real-time length and number of connecting airports, and watch it play out.
 
-**You need two things, both free:**
+Boarding hands you a boarding pass, a 30-row seat map, and a first-person cabin: a textured, three-by-three fuselage interior with seat-back displays — the one directly ahead of your seat showing live flight data — that you look around by dragging. A frequent-flyer tier system (Silver, Gold, Platinum, Premium) advances as you complete flights and determines how early you board.
 
-- **Python 3** — already on macOS and most Linux. Check with `python3 --version`.
-- **Git** — check with `git --version`.
+There is no build step and no backend. The repository is the whole application.
 
-(No Python or Git? See [Installing Python & Git](#installing-python--git) at the bottom.)
+## Requirements
 
-**Then copy-paste this into your terminal:**
+- Python 3 (any recent 3.x; used only to serve static files)
+- A modern desktop browser with WebGL 2
+
+## Getting started
 
 ```bash
 git clone https://github.com/LabbEngine/Flight-Global.git
@@ -21,121 +23,85 @@ cd Flight-Global
 python run.py
 ```
 
-> 💡 On macOS/Linux, if `python` isn't found, just use **`python3 run.py`**.
+`run.py` is a small static file server that opens your browser at `http://localhost:8003`. A server is required because browsers refuse to load the textures and JSON data over `file://`. Stop it with `Ctrl+C`. On macOS and Linux, use `python3` if `python` is not found.
 
-That's it. Your browser opens automatically at **http://localhost:8003** and the globe appears. To stop it, press **`Ctrl + C`** in the terminal.
+No dependency installation is needed: Three.js and GSAP are vendored under `vendor/`, and all textures and data are committed.
 
-**There is nothing else to install** — no `npm install`, no build step, no dependencies to download. The repository *is* the whole app. (`run.py` is a tiny ~10-line static file server; it exists only because browsers refuse to load textures and data straight from `file://` URLs, so the files have to be served over `localhost`.)
+## Features
 
----
+- **Interactive globe** — quaternion trackball camera with inertia, unrestricted rotation over the poles, altitude-scaled zoom, a compass, and idle auto-rotation.
+- **Capitals** — every world capital is marked on the globe while browsing and can be clicked to set it as the destination.
+- **Search** — prefix, word-boundary, IATA, and population-ranked autocomplete over roughly 3,900 cities, 1,200 airports, and a set of landmarks, plus raw coordinates.
+- **Trip planner** — set the total real-time trip length, the number of connecting airports (zero to three), and the wait time at each; the route is re-planned through intermediate airports chosen along the great circle.
+- **Great-circle routes** — shortest-path arcs drawn as a two-tone tube, with automatic fuel stops added when a leg exceeds the aircraft's range.
+- **Four aircraft** — 787-9, 777-300ER, A350-900, and A330-900neo, each with its own range, cruise speed, and capacity.
+- **Boarding and flight** — a boarding pass with real airport codes, a seat map, a tier-aware boarding sequence, and a live dashboard showing status, countdown, altitude, and both arrival clocks.
+- **First-person cabin** — a modelled three-by-three, 30-row interior with textured seats, overhead bins, oval windows onto a shader sky, and seat-back in-flight-entertainment displays. The screen ahead of your seat shows live flight data; the rest show an entertainment home screen. Drag to look around, and return to the map with one button.
+- **Membership** — Silver, Gold, Platinum, and Premium tiers that advance with flights flown and grant earlier boarding.
+- **Timezones** — departure and arrival shown in both zones via the browser's Intl API, with correct daylight-saving handling.
+- **Deep-zoom imagery** — optional Esri World Imagery tiles stream in near the ground when online, and degrade to the base globe when offline.
 
-## 🛫 Take your first flight
-
-Once the globe is up, try this — you can do the whole thing with the keyboard:
-
-1. Start typing a **destination**, e.g. `Tokyo`, and press **Enter**.
-2. Type an **origin**, e.g. `Stockholm`, and press **Enter**. The camera glides in and the route draws itself.
-3. Press **Enter** again to **Board**, and once more to grab a **random seat and go** — or click *Board flight* and pick your own seat.
-4. Watch the flight from the **Top**, **Trip**, or **Behind** camera (in Behind view, drag to look around the plane; click *Behind* again to recenter).
-
-Or just spin the globe and enjoy it — drag to rotate, scroll to zoom, double-click to fly somewhere.
-
----
-
-## 📸 Screenshots
-
-*(Drop your own captures into a `docs/` folder and uncomment these.)*
-
-<!-- ![The globe](docs/screenshot-globe.png) -->
-<!-- ![A flight from Stockholm to Tokyo](docs/screenshot-flight.png) -->
-
----
-
-## ✨ Features
-
-- **A bright, crisp Earth** — 8K satellite texture, fully daylit so the map is always readable, with drifting clouds, an atmospheric rim glow, and a procedural star field. Zoom in and an unsharp-mask detail layer sharpens the terrain; during a flight the whole map dims so the route pops.
-- **Free-flight camera** — full trackball rotation in every direction (straight over the poles), inertia, deep zoom, double-click to fly anywhere, a live compass, and gentle auto-rotate when idle.
-- **Smart search** — instant autocomplete over ~3,900 cities, ~1,200 airports, famous landmarks, and raw coordinates (`59.33, 18.07` works). Pick a destination, then an origin, and the route **calculates itself**.
-- **Great-circle routes** — the true shortest path over the sphere, drawn as a clean two-tone arc that traces itself in 3 seconds, with a pulse ripple when it reaches the city.
-- **Board your flight** — a boarding pass with real airport call signs (Stockholm → **ARN**, Tokyo → **HND**), a seat map, and a pomodoro-style flight length (1 / 5 / 15 / 25 / 45 min). Board and you get a *Now boarding* sequence, then takeoff, a live dashboard (status, countdown, altitude, both arrival clocks), a jet-engine sound with a volume slider, and big cities labelled on the map as you cross them.
-- **A four-plane fleet** — 787-9 Dreamliner, 777-300ER, A350-900, A330-900neo, with distinct silhouettes and stats. Fuel stops are added automatically if a plane can't make it in one hop.
-- **Find me** — flies to your real location via the browser's geolocation, and starts there on each load.
-- **Deep-zoom detail** — zoom down to a city and, if you're online, real satellite tiles stream in so you can explore the ground.
-- **Offline-first** — the whole app runs with no internet after cloning (see [Offline](#-offline)).
-
----
-
-## ⌨ Controls & shortcuts
+## Controls
 
 | Input | Action |
 | --- | --- |
 | Drag | Rotate the globe |
-| Scroll / pinch | Zoom in and out |
-| Double-click | Fly to that spot |
-| Right-click | Pin an arbitrary spot as origin/destination |
-| Type + `Enter` | Pick a place, then keep pressing `Enter` to calculate → board → go |
-| `/` | Focus the search box |
-| `↑ ↓` | Move through search results |
-| `+` / `-` | Zoom in / out |
+| Scroll or pinch | Zoom |
+| Double-click | Fly to a point |
+| Click a capital | Set it as the destination |
+| Right-click | Pin an arbitrary point |
+| `/` | Focus search |
 | Arrow keys | Nudge the camera |
-| `h` | Fly to my location |
-| `n` | Point north up (or click the compass) |
-| `c` | Calculate flight / board it |
+| `n` | Point north up |
+| `c` | Calculate a flight, or board it |
 | `f` | Fullscreen |
-| `Esc` | Close menus · cancel boarding · exit a flight |
+| `Esc` | Close menus, cancel boarding, exit a flight |
 
----
+During a flight, switch between the Top, Trip, Behind, and Cabin cameras from the dashboard. In the cabin, dragging looks around (grab-style, so dragging left looks right); the "Earth view" button returns to the globe.
 
-## 🛠 Troubleshooting
+## Project structure
 
-- **`python: command not found`** → use **`python3 run.py`** instead (or install Python — see below).
-- **The browser didn't open** → open the address printed in the terminal yourself (usually http://localhost:8003).
-- **"Address already in use" / port busy** → `run.py` automatically tries ports 8003–8013 and prints the one it used. Open that address.
-- **Blank page or nothing loads** → make sure you ran `python run.py` *from inside the project folder*. Opening `index.html` directly by double-clicking it will **not** work — browsers block loading the textures and data from `file://`, which is exactly why the little server exists.
-- **"Find me" does nothing** → your browser asks for location permission once; if you deny it, the app just falls back to a default view. That's fine.
-- **The close-up satellite detail is missing** → that layer needs an internet connection; everything else works offline.
+```
+index.html            markup and HUD
+run.py                static file server and browser launch
+css/style.css         styling
+js/
+  main.js             boot, application state, render loop
+  globe.js            Earth shader, clouds, atmosphere, stars
+  controls.js         quaternion trackball camera
+  route.js            great-circle geometry and the in-flight comet
+  flight.js           distance, duration, timezones, stops, breaks
+  sim.js              boarding, flight timeline, dashboard, cameras
+  cabin.js            first-person cabin scene
+  capitals.js         clickable capital markers
+  membership.js       frequent-flyer tiers
+  search.js           place search and ranking
+  ui.js               planner, panels, HUD, keyboard
+  pins.js, tiles.js, audio.js, citylabels.js, fx.js, geo.js
+data/                 places.json, aircraft.json
+assets/textures/      committed Earth textures
+vendor/               Three.js and GSAP
+```
 
----
+## How it works
 
-## 🌐 Offline
+Rendering uses a Three.js sphere with a custom fragment shader over the 8K daylight texture, a separate cloud shell, and a fresnel atmosphere. The cabin is an independent Three.js scene with its own renderer, built almost entirely from instanced meshes so that 180 seats, the windows, and the seat-back displays cost only a handful of draw calls; the sky outside the windows is a fractal-noise cloud shader.
 
-After cloning, FlyCool runs with **no internet at all**. Three.js and GSAP are vendored in `/vendor`, the Earth textures live in `/assets/textures`, the place and aircraft data in `/data`, and timezones come from the browser's built-in database. Sound is generated in-browser. The single online extra is the deep-zoom satellite detail (Esri World Imagery tiles); with the network off it simply isn't there and the base globe shows instead.
+Routing interpolates the two endpoints on the sphere, samples the great circle, and lifts the path above the surface. Distance is the haversine formula. Connecting airports (the planner's "breaks") are the nearest airports to points spaced evenly along the track. The flight plays on a real-time schedule: each leg runs for its share of the trip length, with a ground pause at each connecting airport.
 
----
+Timezones use `Intl.DateTimeFormat` with IANA zone names, so daylight-saving transitions are handled correctly without any bundled timezone data.
 
-## 🔧 How it works
+## Offline behaviour
 
-**The globe** is a Three.js sphere with a custom GLSL shader over the 8K daylight texture: evenly daylit, with a sun-driven water glint, an altitude-scaled unsharp mask that sharpens terrain as you zoom, and a brightness uniform the flight sim tweens to dim the world in flight. A second sphere carries the clouds (they fade away below ~1,000 km so they never smear the ground); a third renders the atmospheric rim glow.
+After cloning, FocusAir runs with no network access. Libraries are vendored, textures and data are committed, sound is synthesised in the browser, and timezones come from the browser. The only online feature is the optional deep-zoom satellite imagery, which is simply absent — not broken — when offline.
 
-**Search** reads `data/places.json` (curated from GeoNames and OurAirports) into memory and scores matches by prefix, word boundary, IATA code, and population — all client-side.
+## Data and attribution
 
-**Routes** are great circles: both endpoints become unit vectors and the path is their spherical interpolation, lifted above the surface. Distance is the haversine formula; flight time is distance over cruise speed plus a taxi/climb allowance; fuel stops are picked from large airports near the direct track when a leg would exceed a plane's range.
-
-**Time zones** use the browser's `Intl.DateTimeFormat` with IANA zone names — DST-correct and offline, since the timezone database ships with every browser.
-
----
-
-## 📝 Editing the data
-
-Aircraft live in `data/aircraft.json` and places in `data/places.json` — both are plain JSON you can edit to add your own planes, cities, or landmarks. A place needs `name`, `lat`, `lng`, and an IANA `tz` (like `Europe/Stockholm`). Refresh the page to see changes.
-
----
-
-## 📦 Installing Python & Git
-
-- **Python 3** — check with `python3 --version`.
-  - **macOS:** `brew install python3`, or download from [python.org](https://www.python.org/downloads/).
-  - **Windows:** download from [python.org](https://www.python.org/downloads/) and tick **"Add Python to PATH"** during install.
-  - **Linux:** `sudo apt install python3` (Debian/Ubuntu) or your distro's package manager.
-- **Git** — check with `git --version`. Get it from [git-scm.com](https://git-scm.com/downloads), or `brew install git` / `sudo apt install git`.
-
-You don't even strictly need Git — you can hit **"Download ZIP"** on the GitHub page, unzip it, `cd` into the folder, and run `python run.py`.
-
----
-
-## 🙏 Credits
-
-- Earth textures by [Solar System Scope](https://www.solarsystemscope.com/textures/) (CC BY 4.0), based on NASA Blue Marble / Black Marble imagery.
-- Deep-zoom imagery tiles: Esri World Imagery (© Esri, Maxar, Earthstar Geographics).
+- Earth textures by [Solar System Scope](https://www.solarsystemscope.com/textures/) (CC BY 4.0), based on NASA Blue Marble and Black Marble imagery.
 - Place data from [GeoNames](https://www.geonames.org/) (CC BY 4.0); airports from [OurAirports](https://ourairports.com/data/) (public domain).
-- Rendered with [Three.js](https://threejs.org/), animated with [GSAP](https://gsap.com/).
+- Deep-zoom imagery: Esri World Imagery (© Esri, Maxar, Earthstar Geographics).
+- Rendered with [Three.js](https://threejs.org/); animated with [GSAP](https://gsap.com/).
+
+## License
+
+Released under the terms in the [LICENSE](LICENSE) file.

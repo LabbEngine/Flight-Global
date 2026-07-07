@@ -187,6 +187,20 @@ export function initUI(app) {
   els.departure.addEventListener('change', () => app.onDepartureChanged());
   els.calc.addEventListener('click', () => app.primaryAction());
 
+  // trip planner: total real-time length, breaks (connecting airports), layover length
+  const tripMin = $('trip-min'), tripVal = $('trip-min-val');
+  const layMin = $('layover-min'), layVal = $('layover-min-val'), layField = $('layover-field');
+  tripMin.addEventListener('input', () => { tripVal.textContent = tripMin.value; app.setTripMinutes(+tripMin.value); });
+  layMin.addEventListener('input', () => { layVal.textContent = layMin.value; app.setLayoverMinutes(+layMin.value); });
+  for (const chip of document.querySelectorAll('.break-chip')) {
+    chip.addEventListener('click', () => {
+      for (const c of document.querySelectorAll('.break-chip')) c.classList.toggle('is-on', c === chip);
+      const n = +chip.dataset.b;
+      layField.hidden = n === 0;
+      app.setBreaks(n);
+    });
+  }
+
   function setSearchHint(role) {
     if (role) {
       els.searchInput.placeholder = `Search ${role === 'origin' ? 'origin' : 'destination'}: city, airport, coordinates…`;

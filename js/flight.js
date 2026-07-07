@@ -76,21 +76,50 @@ function planStops(origin, dest, usableKm, airports) {
   return haversineKm(cur, dest) <= usableKm ? stops : null;
 }
 
+// A point on the great circle from a to b at fraction f (0..1).
+function interpGC(a, b, f) {
+  const R = Math.PI / 180, D = 180 / Math.PI;
+  const la1 = a.lat * R, lo1 = a.lng * R, la2 = b.lat * R, lo2 = b.lng * R;
+  const d = 2 * Math.asin(Math.sqrt(Math.sin((la2 - la1) / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin((lo2 - lo1) / 2) ** 2));
+  if (d < 1e-6) return { lat: a.lat, lng: a.lng };
+  const A = Math.sin((1 - f) * d) / Math.sin(d), B = Math.sin(f * d) / Math.sin(d);
+  const x = A * Math.cos(la1) * Math.cos(lo1) + B * Math.cos(la2) * Math.cos(lo2);
+  const y = A * Math.cos(la1) * Math.sin(lo1) + B * Math.cos(la2) * Math.sin(lo2);
+  const z = A * Math.sin(la1) + B * Math.sin(la2);
+  return { lat: Math.atan2(z, Math.hypot(x, y)) * D, lng: Math.atan2(y, x) * D };
+}
+
+// Pick `n` connecting airports spaced evenly along the direct track — the user's "breaks".
+function planBreaks(origin, dest, n, airports) {
+  const stops = [], used = new Set();
+  for (let i = 1; i <= n; i++) {
+    const target = interpGC(origin, dest, i / (n + 1));
+    let best = null, bestD = Infinity;
+    for (const a of airports) {
+      if (used.has(a) || a === origin || a === dest) continue;
+      const d = haversineKm(target, a);
+      if (d < bestD) { bestD = d; best = a; }
+    }
+    if (best) { stops.push(best); used.add(best); }
+  }
+  return stops;
+}
+
 // The main event: everything the info panel needs, from two pins,
 // an aircraft, and a departure instant.
-export function computeFlight({ origin, dest, aircraft, departure, airports }) {
+export function computeFlight({ origin, dest, aircraft, departure, airports, breaks = null }) {
   const directKm = haversineKm(origin, dest);
   const usableKm = aircraft.maxRangeKm * USABLE_RANGE;
 
   let stops = [];
   let feasible = true;
-  if (directKm > usableKm) {
+  if (breaks != null) {
+    // the user chose exactly how many connecting airports they want
+    if (breaks > 0) stops = planBreaks(origin, dest, breaks, airports);
+  } else if (directKm > usableKm) {
     const planned = planStops(origin, dest, usableKm, airports);
-    if (planned === null) {
-      feasible = false;
-    } else {
-      stops = planned;
-    }
+    if (planned === null) feasible = false;
+    else stops = planned;
   }
 
   const waypoints = [origin, ...stops, dest];

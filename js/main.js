@@ -11,6 +11,8 @@ import { FlightSim } from './sim.js';
 import { TileLayer } from './tiles.js';
 import { FlightAudio } from './audio.js';
 import { CityLabels } from './citylabels.js';
+import { CapitalLabels } from './capitals.js';
+import { TIERS, tierFor, tierProgress, addFlight } from './membership.js';
 import { initUI } from './ui.js';
 
 const HOME = { lat: 45, lng: 15, dist: 2.85 };
@@ -69,6 +71,7 @@ async function boot() {
   const tiles = new TileLayer(scene);
   const audio = new FlightAudio();
   const cityLabels = new CityLabels(document.getElementById('labels'), places);
+  const capitals = new CapitalLabels(document.getElementById('labels'), places, (cap) => app.setPlace('dest', cap));
   const airports = places.filter((p) => p.type === 'airport');
   // a city shows its biggest nearby airport's call sign (Stockholm -> ARN)
   const airportCode = (place) => {
@@ -82,7 +85,7 @@ async function boot() {
     aircraftList,
     places,
     pendingRole: null,
-    state: { origin: null, dest: null, aircraft: aircraftList[0], flight: null },
+    state: { origin: null, dest: null, aircraft: aircraftList[0], flight: null, tripMinutes: 15, breaks: 0, layoverMinutes: 5 },
 
     armSlot(role) {
       app.pendingRole = role;
@@ -130,6 +133,12 @@ async function boot() {
       app.state.aircraft = aircraftList.find((a) => a.id === id);
       if (app.state.flight) app.calculate({ recenter: false, silent: true });
     },
+    setTripMinutes(m) { app.state.tripMinutes = Math.max(1, Math.round(m)); },
+    setBreaks(n) {
+      app.state.breaks = Math.max(0, Math.min(3, Math.round(n)));
+      if (app.state.flight) app.calculate({ recenter: false, silent: true }); // route changes with breaks
+    },
+    setLayoverMinutes(m) { app.state.layoverMinutes = Math.max(1, Math.round(m)); },
     onDepartureChanged() {
       if (app.state.flight) app.calculate({ recenter: false, silent: true });
     },
@@ -151,6 +160,7 @@ async function boot() {
       sim.openBoarding({
         origin, dest, aircraft, flight: app.state.flight,
         originCode: airportCode(origin), destCode: airportCode(dest),
+        tripMinutes: app.state.tripMinutes, layoverMinutes: app.state.layoverMinutes,
       });
     },
     // Enter keeps advancing the whole flow: board when ready, or grab a random
@@ -174,7 +184,7 @@ async function boot() {
         return;
       }
       const result = computeFlight({
-        origin, dest, aircraft, departure: app.departureInstant(), airports,
+        origin, dest, aircraft, departure: app.departureInstant(), airports, breaks: app.state.breaks,
       });
       app.state.flight = result;
       pins.setStops(result.stops);
@@ -300,7 +310,14 @@ async function boot() {
         ui.renderPlanner();
       }
     },
-    onFinish(dest) { app.arriveAndReset(dest); },
+    onFinish(dest) {
+      const before = tierFor().key;
+      const flights = addFlight(); // one more completed flight toward the next tier
+      app.arriveAndReset(dest);
+      renderMembership();
+      const after = tierFor(flights);
+      if (after.key !== before) gsap.delayedCall(3.6, () => ui.toast(`✦ Membership upgraded to ${after.name}!`));
+    },
     // exit began: unselect everything but keep the destination callout in
     // view while the plane finishes its run there
     onDeselect() {
@@ -327,6 +344,29 @@ async function boot() {
   const pad = (n) => String(n).padStart(2, '0');
   ui.departureEl.value =
     `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
+  // ---------- membership chip + card ----------
+  const memChip = document.getElementById('mem-chip');
+  const memTierEl = document.getElementById('mem-tier');
+  const memCard = document.getElementById('mem-card');
+  function renderMembership() {
+    const t = tierFor();
+    memTierEl.textContent = t.name;
+    memChip.style.setProperty('--tc', t.color);
+  }
+  function showMemCard() {
+    const p = tierProgress();
+    memCard.innerHTML = `
+      <button class="card-close" id="mem-close" title="Close">×</button>
+      <div class="mem-head"><span class="mem-badge" style="--tc:${p.cur.color}">${p.cur.name}</span><span class="mem-flights">${p.flights} flight${p.flights === 1 ? '' : 's'} flown</span></div>
+      <div class="mem-ladder">${TIERS.map((x) => `<span class="mem-step${x.key === p.cur.key ? ' is-cur' : ''}${p.flights >= x.min ? ' is-reached' : ''}" style="--tc:${x.color}">${x.name}<small>${x.min}+</small></span>`).join('')}</div>
+      ${p.next ? `<div class="mem-bar"><span style="width:${Math.round(p.frac * 100)}%"></span></div><div class="mem-next"><b>${p.need}</b> more flight${p.need === 1 ? '' : 's'} to <b style="color:${p.next.color}">${p.next.name}</b></div>` : `<div class="mem-next">Top tier — you fly <b style="color:${p.cur.color}">Premium</b> ✦</div>`}
+      <div class="mem-perk">Higher tiers board first — your boarding pass shows your group by tier.</div>`;
+    memCard.hidden = false;
+    document.getElementById('mem-close').onclick = () => { memCard.hidden = true; };
+  }
+  memChip.onclick = () => { if (memCard.hidden) showMemCard(); else memCard.hidden = true; };
+  renderMembership();
 
   new SearchBox({
     input: ui.searchInput,
@@ -452,6 +492,8 @@ async function boot() {
     pins.update(camera, innerWidth, innerHeight);
     cityLabels.setActive(sim.inFlight || sim.finishing); // big cities to spot in flight
     cityLabels.update(camera, innerWidth, innerHeight);
+    capitals.setActive(!sim.busy && !route.isActive); // capitals clickable while browsing the globe
+    capitals.update(camera, innerWidth, innerHeight);
     _north.set(0, 1, 0).applyQuaternion(_invQ.copy(camera.quaternion).invert());
     ui.updateCompass(Math.atan2(_north.x, _north.y) * 180 / Math.PI);
 
