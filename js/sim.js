@@ -336,6 +336,7 @@ export class FlightSim {
       this.route.setProgressKm(ph.km0 + (ph.km1 - ph.km0) * f);
       this.atStop = null;
     }
+    this.route.setParked(this.atStop != null); // landed at a connecting airport → hide the plane
     // track the current leg (during a layover, the leg you're about to depart on)
     const nLegs = this.route.legs?.length || 1;
     const newLeg = !ph ? this.legIdx
@@ -480,14 +481,14 @@ export class FlightSim {
         const from = this.#wpCode(leg.from), to = this.#wpCode(leg.to);
         legEl.hidden = false;
         legEl.innerHTML = atStop
-          ? `<span class="leg-count">Layover</span> ${from} <span class="leg-arrow">→</span> ${to}`
+          ? `<span class="leg-count">Landed</span> ${from} <span class="leg-arrow">→</span> ${to}`
           : `<span class="leg-count">Leg ${this.legIdx + 1}/${legs.length}</span> ${from} <span class="leg-arrow">→</span> ${to}`;
       } else {
         legEl.hidden = true;
       }
     }
     const phase = this.landed ? { t: 'Landed', k: 'landed' }
-      : atStop ? { t: `Layover · ${atStop.name}`, k: 'lifting' }
+      : atStop ? { t: `Landed · ${atStop.name}`, k: 'landed' }
       : frac < 0.05 ? { t: 'Lifting off', k: 'lifting' }
       : frac > 0.94 ? { t: 'Landing', k: 'landing' }
       : { t: 'En route', k: 'route' };
