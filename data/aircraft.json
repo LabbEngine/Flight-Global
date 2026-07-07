@@ -1,0 +1,42 @@
+[
+  {
+    "id": "b789",
+    "manufacturer": "Boeing",
+    "name": "787-9 Dreamliner",
+    "cruiseSpeedKmh": 903,
+    "maxRangeKm": 14140,
+    "cruiseAltitudeFt": 40000,
+    "maxPassengers": 296,
+    "fuelBurnKgPerHour": 5400
+  },
+  {
+    "id": "b77w",
+    "manufacturer": "Boeing",
+    "name": "777-300ER",
+    "cruiseSpeedKmh": 905,
+    "maxRangeKm": 13650,
+    "cruiseAltitudeFt": 39000,
+    "maxPassengers": 396,
+    "fuelBurnKgPerHour": 7500
+  },
+  {
+    "id": "a359",
+    "manufacturer": "Airbus",
+    "name": "A350-900",
+    "cruiseSpeedKmh": 903,
+    "maxRangeKm": 15000,
+    "cruiseAltitudeFt": 41000,
+    "maxPassengers": 325,
+    "fuelBurnKgPerHour": 5800
+  },
+  {
+    "id": "a339",
+    "manufacturer": "Airbus",
+    "name": "A330-900neo",
+    "cruiseSpeedKmh": 871,
+    "maxRangeKm": 13334,
+    "cruiseAltitudeFt": 41000,
+    "maxPassengers": 287,
+    "fuelBurnKgPerHour": 5600
+  }
+]

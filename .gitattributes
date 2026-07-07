@@ -1,0 +1,7 @@
+# Consistent LF line endings on every platform, so a clone is byte-identical.
+* text=auto eol=lf
+
+# Never let git touch binary assets.
+*.jpg binary
+*.png binary
+*.ico binary

@@ -1,0 +1,15 @@
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# editors & tools
+.vscode/
+.idea/
+*.swp
+.claude/
+
+# python & node caches (nothing required to run lives here)
+__pycache__/
+*.pyc
+node_modules/
