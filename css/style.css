@@ -529,22 +529,37 @@ body.sim-on .sidebar { display: none; }
   font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em;
   color: var(--muted); margin: 15px 0 8px;
 }
-.seat-map { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; max-height: 208px; overflow-y: auto; padding-right: 4px; }
-.seat-row { display: flex; align-items: center; gap: 4px; }
-.seat-rownum {
-  width: 20px; font-size: 10px; color: var(--muted);
-  font-variant-numeric: tabular-nums; flex: none;
+/* seat map drawn inside a plane fuselage: nose cone up top, seats down the body */
+.cabin-map { margin: 2px 0 14px; }
+.cabin-nose { line-height: 0; display: flex; justify-content: center; }
+.cabin-nose svg { width: 234px; max-width: 100%; height: 58px; display: block; }
+.cabin-body {
+  width: 234px; max-width: 100%; margin: 0 auto; box-sizing: border-box;
+  padding: 9px 12px 12px;
+  background: linear-gradient(180deg, #15181e, #0d0f14);
+  border: 1px solid rgba(255, 255, 255, 0.05); border-top: none;
+  border-radius: 0 0 18px 18px;
+  box-shadow: inset 0 0 34px rgba(0, 0, 0, 0.55);
 }
+.cabin-cols { display: flex; justify-content: center; gap: 4px; margin-bottom: 7px; }
+.cabin-cols span {
+  width: 26px; text-align: center; font-size: 9.5px; font-weight: 700;
+  letter-spacing: 0.06em; color: var(--muted);
+}
+.seat-map { display: flex; flex-direction: column; gap: 5px; max-height: 214px; overflow-y: auto; }
+.seat-row { display: flex; align-items: center; justify-content: center; gap: 4px; }
 .seat-group { display: flex; gap: 4px; }
-.seat-aisle { width: 14px; flex: none; }
-.seat {
-  width: 23px; height: 23px; border-radius: 6px 6px 3px 3px;
-  background: rgba(255, 255, 255, 0.09);
-  border: 1px solid var(--stroke);
-  transition: background 0.12s ease, transform 0.12s ease;
+.seat-rownum {
+  width: 26px; text-align: center; font-size: 9.5px; color: rgba(255, 255, 255, 0.34);
+  font-variant-numeric: tabular-nums; font-weight: 600; flex: none;
 }
-.seat:not(.is-occ):hover { background: rgba(55, 198, 255, 0.32); transform: translateY(-1px); }
-.seat.is-occ { background: rgba(255, 255, 255, 0.025); border-color: transparent; cursor: not-allowed; }
+.seat {
+  width: 26px; height: 25px; border-radius: 7px; flex: none;
+  background: #262c35; border: 1px solid rgba(255, 255, 255, 0.07);
+  cursor: pointer; transition: background 0.12s ease, transform 0.12s ease, box-shadow 0.12s ease;
+}
+.seat:not(.is-occ):hover { background: rgba(55, 198, 255, 0.34); transform: translateY(-1px); }
+.seat.is-occ { background: #14171d; border-color: transparent; cursor: not-allowed; }
 .seat.is-sel { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 10px rgba(55, 198, 255, 0.6); }
 .boarding-card .btn--primary { width: 100%; }
 
@@ -588,6 +603,17 @@ body.sim-on .sidebar { display: none; }
 .dash-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .dash-route { font-size: 13.5px; font-weight: 680; }
 .dash-exit { padding: 4px 10px; font-size: 11px; }
+.dash-leg {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px 7px;
+  margin-top: 7px; font-size: 11.5px; font-weight: 660; color: var(--accent);
+}
+.dash-leg .leg-count {
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted); background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--stroke); border-radius: 20px; padding: 3px 8px;
+}
+.dash-leg .leg-arrow { color: var(--muted); }
+.dash-leg[hidden] { display: none; }
 .dash-bar {
   height: 4px; border-radius: 4px; margin: 10px 0 12px;
   background: rgba(255, 255, 255, 0.1); overflow: hidden;
@@ -672,15 +698,17 @@ body.sim-on .hud-top-left, body.sim-on #info-panel, body.sim-on #place-card { di
   padding: 5px 13px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em;
   color: var(--ink); border-radius: 20px; pointer-events: none;
 }
-.cabin-exit {
-  position: absolute; left: 18px; top: 18px; z-index: 4;
+.cabin-exit, .cabin-look {
+  position: absolute; left: 18px; z-index: 4;
   display: inline-flex; align-items: center; gap: 7px;
   padding: 8px 14px; font: inherit; font-size: 12.5px; font-weight: 600;
   color: var(--ink); border-radius: 22px; cursor: pointer;
   transition: background 0.15s ease, transform 0.15s ease;
 }
-.cabin-exit svg { color: var(--accent); flex: none; }
-.cabin-exit:hover { background: var(--glass-strong); transform: translateY(-1px); }
+.cabin-exit { top: 18px; }
+.cabin-look { top: 60px; }
+.cabin-exit svg, .cabin-look svg { color: var(--accent); flex: none; }
+.cabin-exit:hover, .cabin-look:hover { background: var(--glass-strong); transform: translateY(-1px); }
 
 /* ---------- membership ---------- */
 .mem-chip {

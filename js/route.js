@@ -96,6 +96,7 @@ export class FlightRoute {
     this.tweens = [];
     this.active = false;
     this.simMode = false;
+    this.parked = false; // true during a layover: plane + comet hidden while landed
     this.progressKm = 0;
     this._pos = new THREE.Vector3(); // scratch for #pointAt
     this._planePos = new THREE.Vector3();
@@ -184,6 +185,7 @@ export class FlightRoute {
   enterSim() {
     if (!this.active) return;
     this.simMode = true;
+    this.parked = false;
     this.progressKm = 0;
     for (const leg of this.legs) { leg.tube.visible = false; leg.casing.visible = false; }
     this.fullLine.visible = true;
@@ -206,6 +208,7 @@ export class FlightRoute {
     this.ahead.visible = false;
   }
   setProgressKm(km) { this.progressKm = THREE.MathUtils.clamp(km, 0, this.totalKm); }
+  setParked(v) { this.parked = !!v; } // parked = landed at a layover: hide the plane + comet
   planeState() {
     if (!this.active || !this.plane?.visible) return null;
     return { pos: this._planePos.clone(), fwd: this._planeFwd.clone() };
@@ -232,6 +235,14 @@ export class FlightRoute {
   update(dt, camera) {
     if (!this.active) return;
     if (!this.simMode) return; // planning: static tubes, nothing to animate
+    if (this.parked) { // landed at a connecting airport — hide the plane and the comet
+      this.plane.visible = false;
+      this.trail.visible = false;
+      this.ahead.visible = false;
+      return;
+    }
+    this.plane.visible = true;
+    this.trail.visible = true;
 
     const pos = new THREE.Vector3();
     const tan = new THREE.Vector3();

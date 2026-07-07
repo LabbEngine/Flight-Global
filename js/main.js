@@ -479,14 +479,15 @@ async function boot() {
   const renderFrame = () => {
     const dt = Math.min(clock.getDelta(), 0.05);
     const t = clock.elapsedTime;
-    controls.autoRotate = !route.isActive; // don't drift away from a live flight
+    // don't drift away from a live flight, and stay locked on a chosen city
+    controls.autoRotate = !route.isActive && !app.state.origin && !app.state.dest;
     sim.advance(); // sets the plane's progress before the route positions it
     controls.update(dt);
     const altitude = camera.position.length() - 1;
     globe.update(dt, altitude);
     route.update(dt, camera);
     sim.updateCamera(); // chase cam needs the freshly-positioned plane
-    tiles.enabled = !sim.busy; // deep-zoom detail off during a flight
+    tiles.enabled = !sim.busy; // satellite tiles off during a flight (dim base reads better)
     tiles.update(camera);
     tileAttrib.hidden = !tiles.active;
     pins.update(camera, innerWidth, innerHeight);

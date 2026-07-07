@@ -471,6 +471,13 @@ export class CabinView {
     back.addEventListener('pointerdown', (e) => e.stopPropagation());
     back.addEventListener('click', () => this.onExit && this.onExit());
     this.container.appendChild(back);
+    // "Window view" — swing the gaze to frame the window on your side
+    const look = document.createElement('button');
+    look.className = 'cabin-look glass';
+    look.innerHTML = '<svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true"><rect x="5.5" y="2.5" width="9" height="15" rx="4.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M6.6 12.2c1.9-2.4 5-2.4 6.9 0" fill="none" stroke="currentColor" stroke-width="1.1"/><circle cx="13" cy="6.6" r="1.5" fill="currentColor"/></svg><span>Window view</span>';
+    look.addEventListener('pointerdown', (e) => e.stopPropagation());
+    look.addEventListener('click', () => this.lookOutWindow());
+    this.container.appendChild(look);
     this.tag = document.createElement('span');
     this.tag.className = 'cabin-tag glass';
     this.container.appendChild(this.tag);
@@ -513,6 +520,16 @@ export class CabinView {
 
   setFlightData(d) { this._data = d; if (this.ready) this.#drawData(); }
 
+  // aim the gaze straight at your window so it fills the frame (eased in _loop)
+  lookOutWindow() {
+    if (!this._winTarget) return;
+    const p = this.camera.position, t = this._winTarget;
+    const dx = t.x - p.x, dy = t.y - p.y, dz = t.z - p.z;
+    const len = Math.hypot(dx, dy, dz) || 1;
+    this.tYaw = THREE.MathUtils.clamp(Math.atan2(-dx, -dz), -3.1, 3.1);
+    this.tPitch = THREE.MathUtils.clamp(Math.asin(dy / len), -0.85, 0.9);
+  }
+
   // put the live data screen on the seat ahead of you, and hide that seat's generic screen
   #placeDataScreen(row, L) {
     if (this._hidden) { this._hidden.im.setMatrixAt(this._hidden.idx, this._hidden.mtx); this._hidden.im.instanceMatrix.needsUpdate = true; this._hidden = null; }
@@ -546,6 +563,8 @@ export class CabinView {
     if (SEAT_X[L] === undefined) L = 'A';
     const windowLeft = L === 'A' || L === 'B' || L === 'C';
     this.camera.position.set(SEAT_X[L], EYE_Y, rowZ(row) - 0.05);
+    // the window on your side of the fuselage — the "Window view" button aims here
+    this._winTarget = new THREE.Vector3((ellipseX(WIN_Y) - 0.02) * (windowLeft ? -1 : 1), WIN_Y, rowZ(row));
     this.yaw = this.tYaw = windowLeft ? 0.5 : -0.5;
     this.pitch = this.tPitch = -0.02;
     this.tag.textContent = `Seat ${row}${L} · drag to look around`;

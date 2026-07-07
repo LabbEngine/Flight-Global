@@ -1,18 +1,22 @@
-// Deep-zoom detail: when you zoom close AND have internet, stream Esri World
-// Imagery tiles and drape them on the sphere so you can actually investigate
-// the ground. Keyless (no billing, unlike Google), and fully optional — if the
-// tiles can't load (offline), the base globe simply shows through. This is the
-// one online feature; everything else runs offline.
+// The globe surface: high-res Esri World Imagery satellite tiles draped on the
+// sphere. A coverage grid blankets the whole visible cap so the globe is always
+// satellite; a second high-zoom detail patch loads around the look point for
+// street-level resolution as you close in. Streams when online; offline the base
+// satellite sphere shows through (poles always do — Web-Mercator stops at ±85°).
 import * as THREE from '../vendor/three/three.module.js';
 import { latLngToVec3 } from './geo.js';
 
+// Esri World Imagery: keyless high-res satellite (note the z/y/x order).
 const TILE_URL = (z, x, y) =>
   `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`;
-const ENGAGE_DIST = 1.11; // ~700 km altitude
-const GRID = 2;           // (2*GRID+1)^2 tiles -> 5x5 around the look point
+const COV_GRID = 3;       // coverage: 7x7 tiles blanket the whole visible cap
+const DET_GRID = 2;       // detail: a 5x5 high-zoom patch around the look point
 const PATCH = 8;          // mesh subdivisions per tile (for sphere curvature)
-const R = 1.0006;         // just above the base surface, below the cloud shell
-const MAX_Z = 17;
+const R_COV = 1.0025;     // coverage shell: clear of the base sphere (no limb z-fight)
+const R_DET = 1.004;      // detail shell: above coverage so crisp tiles win
+const MIN_Z = 2;
+const COV_MAX_Z = 7;      // coverage stays bounded; the detail patch carries resolution
+const MAX_Z = 19;
 
 const clampLat = (l) => Math.max(-85.05, Math.min(85.05, l));
 const lon2tile = (lon, z) => Math.floor((lon + 180) / 360 * (1 << z));
@@ -43,7 +47,7 @@ export class TileLayer {
     return THREE.MathUtils.clamp(Math.round(Math.log2(229000 / Math.max(20, altKm))), 3, MAX_Z);
   }
 
-  #buildPatch(z, x, y, tex) {
+  #buildPatch(z, x, y, tex, radius) {
     const lng0 = tile2lon(x, z), lng1 = tile2lon(x + 1, z);
     const lat0 = tile2lat(y, z), lat1 = tile2lat(y + 1, z);
     const g = PATCH;
@@ -52,7 +56,7 @@ export class TileLayer {
     let p = 0, u = 0;
     for (let j = 0; j <= g; j++) {
       for (let i = 0; i <= g; i++) {
-        const v = latLngToVec3(lat0 + (lat1 - lat0) * (j / g), lng0 + (lng1 - lng0) * (i / g), R);
+        const v = latLngToVec3(lat0 + (lat1 - lat0) * (j / g), lng0 + (lng1 - lng0) * (i / g), radius);
         pos[p++] = v.x; pos[p++] = v.y; pos[p++] = v.z;
         uv[u++] = i / g; uv[u++] = 1 - j / g;
       }
@@ -69,7 +73,7 @@ export class TileLayer {
     return new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: tex }));
   }
 
-  #load(z, x, y) {
+  #load(z, x, y, radius) {
     const key = `${z}/${x}/${y}`;
     if (this.cache.has(key)) { this.cache.get(key).keep = true; return; }
     if (this.failed.has(key)) return;
@@ -79,8 +83,8 @@ export class TileLayer {
       // identity check: the cache may hold a NEWER entry for this key by now
       if (this.cache.get(key) !== entry) { tex.dispose(); return; }
       tex.colorSpace = THREE.SRGBColorSpace;
-      tex.anisotropy = 4;
-      entry.mesh = this.#buildPatch(z, x, y, tex);
+      tex.anisotropy = 8;
+      entry.mesh = this.#buildPatch(z, x, y, tex, radius);
       this.group.add(entry.mesh);
     }, undefined, () => {
       if (this.cache.get(key) === entry) this.cache.delete(key);
@@ -104,32 +108,45 @@ export class TileLayer {
     this.lastKey = '';
   }
 
+  // load a (2*grid+1)^2 block of tiles around a center tile, at a given radius
+  #loadGrid(z, cx, cy, grid, radius) {
+    const max = 1 << z;
+    for (let dy = -grid; dy <= grid; dy++) for (let dx = -grid; dx <= grid; dx++) {
+      const x = ((cx + dx) % max + max) % max;
+      const y = cy + dy;
+      if (y < 0 || y >= max) continue;
+      this.#load(z, x, y, radius);
+    }
+  }
+
   update(camera) {
     const dist = camera.position.length();
-    if (!this.enabled || dist > ENGAGE_DIST) {
+    if (!this.enabled) {
       if (this.active || this.cache.size) this.#clear();
       return;
     }
     const altKm = (dist - 1) * 6371;
-    const z = this.#zoomFor(altKm);
     const c = camera.position.clone().normalize();
     const lat = clampLat(90 - Math.acos(THREE.MathUtils.clamp(c.y, -1, 1)) * 180 / Math.PI);
     let lng = Math.atan2(c.z, -c.x) * 180 / Math.PI - 180;
     if (lng < -180) lng += 360; if (lng > 180) lng -= 360;
-    const cx = lon2tile(lng, z), cy = lat2tile(lat, z);
-    const key = `${z}/${cx}/${cy}`;
+    // Coverage tier: a bounded zoom whose grid spans the whole visible cap, so the
+    // globe is always fully satellite. Detail tier: altitude-based deep zoom around
+    // the look point, layered on top for street-level crispness when it beats coverage.
+    const capFullDeg = 2 * Math.acos(THREE.MathUtils.clamp(1 / dist, 0, 1)) * 180 / Math.PI;
+    const zc = THREE.MathUtils.clamp(Math.floor(Math.log2(360 * (2 * COV_GRID + 1) / Math.max(18, capFullDeg))), MIN_Z, COV_MAX_Z);
+    const zd = this.#zoomFor(altKm);
+    const wantDetail = zd > zc;
+    const cxc = lon2tile(lng, zc), cyc = lat2tile(lat, zc);
+    const cxd = wantDetail ? lon2tile(lng, zd) : 0, cyd = wantDetail ? lat2tile(lat, zd) : 0;
+    const key = `${zc}/${cxc}/${cyc}/${wantDetail ? zd : 0}/${cxd}/${cyd}`;
     if (key === this.lastKey && this.active) return;
     this.lastKey = key;
     this.active = true;
 
     for (const e of this.cache.values()) e.keep = false;
-    const max = 1 << z;
-    for (let dy = -GRID; dy <= GRID; dy++) for (let dx = -GRID; dx <= GRID; dx++) {
-      const x = ((cx + dx) % max + max) % max;
-      const y = cy + dy;
-      if (y < 0 || y >= max) continue;
-      this.#load(z, x, y);
-    }
+    this.#loadGrid(zc, cxc, cyc, COV_GRID, R_COV);
+    if (wantDetail) this.#loadGrid(zd, cxd, cyd, DET_GRID, R_DET);
     for (const [k, e] of [...this.cache.entries()]) {
       if (e.keep) continue;
       this.#drop(e);

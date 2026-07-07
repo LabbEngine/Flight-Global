@@ -107,7 +107,20 @@ export class FlightSim {
           <div class="bp-strip"></div>
         </div>
         <div class="bp-seats-title">Choose your seat</div>
-        <div class="seat-map" id="seat-map"></div>
+        <div class="cabin-map">
+          <div class="cabin-nose">
+            <svg viewBox="0 0 234 58" preserveAspectRatio="none" aria-hidden="true">
+              <defs><linearGradient id="fuseNose" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b313a"/><stop offset="1" stop-color="#12151b"/></linearGradient></defs>
+              <path d="M117 3 C58 3 14 25 6 58 L228 58 C220 25 176 3 117 3 Z" fill="url(#fuseNose)" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+              <path d="M117 17 C97 17 81 26 75 39 L159 39 C153 26 137 17 117 17 Z" fill="rgba(130,165,200,0.14)"/>
+              <path d="M117 17 L117 39" stroke="rgba(20,24,30,0.6)" stroke-width="1.4"/>
+            </svg>
+          </div>
+          <div class="cabin-body">
+            <div class="cabin-cols"><span>A</span><span>B</span><span>C</span><span></span><span>D</span><span>E</span><span>F</span></div>
+            <div class="seat-map" id="seat-map"></div>
+          </div>
+        </div>
         <div class="bp-trip">${this.#tripSummary()}</div>
         <button class="btn btn--primary" id="bp-board" disabled>Pick a seat to board</button>
       </div>`;
@@ -134,7 +147,6 @@ export class FlightSim {
     for (let r = 1; r <= ROWS; r++) {
       const row = document.createElement('div');
       row.className = 'seat-row';
-      row.innerHTML = `<span class="seat-rownum">${r}</span>`;
       groups.forEach((group, gi) => {
         const g = document.createElement('span');
         g.className = 'seat-group';
@@ -148,7 +160,8 @@ export class FlightSim {
           g.appendChild(seat);
         }
         row.appendChild(g);
-        if (gi < groups.length - 1) row.insertAdjacentHTML('beforeend', '<span class="seat-aisle"></span>');
+        // row number sits in the centre aisle, between the two seat blocks
+        if (gi === 0) row.insertAdjacentHTML('beforeend', `<span class="seat-rownum">${String(r).padStart(2, '0')}</span>`);
       });
       map.appendChild(row);
     }
@@ -303,12 +316,13 @@ export class FlightSim {
     let t = 0;
     for (let i = 0; i < legs.length; i++) {
       const dur = this.totalKm > 0 ? flyingS * (legs[i].distKm / this.totalKm) : flyingS;
-      this.journey.push({ type: 'fly', t0: t, t1: t + dur, km0: legs[i].startKm, km1: legs[i].startKm + legs[i].distKm });
+      this.journey.push({ type: 'fly', legIdx: i, t0: t, t1: t + dur, km0: legs[i].startKm, km1: legs[i].startKm + legs[i].distKm });
       t += dur;
       if (i < legs.length - 1) { this.journey.push({ type: 'stop', stopIdx: i, t0: t, t1: t + waitS, km: legs[i].startKm + legs[i].distKm }); t += waitS; }
     }
     this.journeyDurS = Math.max(1, t);
     this.atStop = null;
+    this.legIdx = 0; // which leg is current, for the "Leg" camera + dashboard readout
   }
   #stopName(i) { const s = this.ctx.flight?.stops?.[i]; return s ? (s.iata || s.name) : 'stop'; }
 
@@ -335,6 +349,16 @@ export class FlightSim {
       this.route.setProgressKm(ph.km0 + (ph.km1 - ph.km0) * f);
       this.atStop = null;
     }
+    this.route.setParked(this.atStop != null); // landed at a connecting airport → hide the plane
+    // track the current leg (during a layover, the leg you're about to depart on)
+    const nLegs = this.route.legs?.length || 1;
+    const newLeg = !ph ? this.legIdx
+      : ph.type === 'stop' ? Math.min(nLegs - 1, ph.stopIdx + 1)
+      : ph.legIdx;
+    if (newLeg !== this.legIdx) {
+      this.legIdx = newLeg;
+      if (this.camMode === 'leg') this.#armBlend(); // glide smoothly onto the new leg
+    }
     if (el >= this.journeyDurS) this.#land();
     if (performance.now() - this.lastDash > 250) {
       this.lastDash = performance.now();
@@ -353,12 +377,29 @@ export class FlightSim {
     return { camPos, q: quatLookAt(camPos, new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 1, 0)) };
   }
 
+  // frame just the current leg: current sub-origin → current sub-destination
+  #legCam(i) {
+    const legs = this.ctx.flight?.legs || [];
+    if (!legs.length) return this.#fullCam();
+    const leg = legs[THREE.MathUtils.clamp(i, 0, legs.length - 1)];
+    const o = latLngToVec3(leg.from.lat, leg.from.lng, 1);
+    const d = latLngToVec3(leg.to.lat, leg.to.lng, 1);
+    const mid = o.clone().add(d).normalize();
+    const angular = o.angleTo(d);
+    const dist = THREE.MathUtils.clamp(1.16 + angular * 1.15, 1.55, 5.2); // tighter than the full-trip frame
+    const camPos = mid.multiplyScalar(dist);
+    return { camPos, q: quatLookAt(camPos, new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 1, 0)) };
+  }
+  #wpCode(p) { return String((p && (p.iata || p.name?.slice(0, 3))) || '—').toUpperCase(); }
+
   updateCamera() {
     if (!this.inFlight) return; // during finishing the user owns the camera
     if (this.camMode === 'cabin') return; // Cabin is a DOM scene; the 3D camera sits idle
     let camPos, q;
     if (this.camMode === 'full') {
       ({ camPos, q } = this.#fullCam());
+    } else if (this.camMode === 'leg') {
+      ({ camPos, q } = this.#legCam(this.legIdx));
     } else {
       const st = this.route.planeState();
       if (!st) return;
@@ -392,11 +433,13 @@ export class FlightSim {
   // ---------- dashboard ----------
   #buildDashboard() {
     const { origin, dest } = this.ctx;
+    const multi = (this.route.legs?.length || 1) > 1;
     this.dashEl.innerHTML = `
       <div class="dash-head">
         <span class="dash-route">${this.originCode} <span class="route-arrow">→</span> ${this.destCode} · ${this.flightNo}</span>
         <button class="btn btn--ghost dash-exit" id="dash-exit">Exit</button>
       </div>
+      <div class="dash-leg" id="dash-leg" hidden></div>
       <div class="dash-timer-row">
         <span class="dash-status" id="dash-status" data-phase="lifting">Lifting off</span>
         <span class="dash-timer" id="dash-timer">--:--</span>
@@ -406,6 +449,7 @@ export class FlightSim {
       <div class="cam-modes">
         <button class="cam-mode is-on" data-m="top" type="button">Top</button>
         <button class="cam-mode" data-m="full" type="button">Trip</button>
+        ${multi ? '<button class="cam-mode" data-m="leg" type="button">Leg</button>' : ''}
         <button class="cam-mode" data-m="behind" type="button">Behind</button>
         <button class="cam-mode" data-m="cabin" type="button">Cabin</button>
       </div>
@@ -441,8 +485,23 @@ export class FlightSim {
     const timerEl = document.getElementById('dash-timer');
     if (timerEl) timerEl.textContent = this.landed ? 'Arrived' : `${mm}:${String(ss).padStart(2, '0')}`;
     const atStop = this.atStop;
+    // current-leg readout for connecting flights (which sub-trip you're on)
+    const legEl = document.getElementById('dash-leg');
+    if (legEl) {
+      const legs = this.ctx.flight?.legs || [];
+      if (legs.length > 1 && !this.landed) {
+        const leg = legs[Math.min(this.legIdx, legs.length - 1)];
+        const from = this.#wpCode(leg.from), to = this.#wpCode(leg.to);
+        legEl.hidden = false;
+        legEl.innerHTML = atStop
+          ? `<span class="leg-count">Landed</span> ${from} <span class="leg-arrow">→</span> ${to}`
+          : `<span class="leg-count">Leg ${this.legIdx + 1}/${legs.length}</span> ${from} <span class="leg-arrow">→</span> ${to}`;
+      } else {
+        legEl.hidden = true;
+      }
+    }
     const phase = this.landed ? { t: 'Landed', k: 'landed' }
-      : atStop ? { t: `Layover · ${atStop.name}`, k: 'lifting' }
+      : atStop ? { t: `Landed · ${atStop.name}`, k: 'landed' }
       : frac < 0.05 ? { t: 'Lifting off', k: 'lifting' }
       : frac > 0.94 ? { t: 'Landing', k: 'landing' }
       : { t: 'En route', k: 'route' };
