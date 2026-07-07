@@ -1,6 +1,9 @@
 # Consistent LF line endings on every platform, so a clone is byte-identical.
 * text=auto eol=lf
 
+# Windows batch files are the one exception: cmd.exe can mis-handle LF, so CRLF.
+*.bat text eol=crlf
+
 # Never let git touch binary assets.
 *.jpg binary
 *.png binary
