@@ -73,7 +73,7 @@ export class FlightSim {
     if (!this.boardingEl.hidden) return; // already boarding — don't wipe the seat pick
     this.ctx = ctx;
     this.seat = null;
-    this.simAirports = false; // "Simulate airports": re-board at each connecting stop
+    this.simAirports = true; // also play the airport at each connecting stop (board always plays it)
     this.tripMinutes = ctx.tripMinutes || 15;
     this.layoverMinutes = ctx.layoverMinutes || 5;
     const multiLeg = (ctx.flight?.legs?.length || 1) > 1;
@@ -124,7 +124,7 @@ export class FlightSim {
           </div>
         </div>
         <div class="bp-trip">${this.#tripSummary()}</div>
-        <button class="bp-simair" id="bp-simair" type="button"><span class="simair-check"></span><span>Simulate airports</span><span class="simair-hint">${multiLeg ? 'walk each airport to your seat' : 'walk the airport to your seat'}</span></button>
+        ${multiLeg ? `<button class="bp-simair is-on" id="bp-simair" type="button"><span class="simair-check"></span><span>Airport at each stop</span><span class="simair-hint">play a pitstop at every connection</span></button>` : ''}
         <button class="btn btn--primary" id="bp-board" disabled>Pick a seat to board</button>
       </div>`;
     this.#buildSeatMap();
@@ -194,17 +194,11 @@ export class FlightSim {
     this.ui.toast(`Seat ${this.seat} · welcome aboard`);
     const { origin, dest } = this.ctx;
     this.controls.flyTo({ lat: origin.lat, lng: origin.lng, dist: 1.14, duration: 2.4 }); // zoom into the gate
-    if (this.simAirports) {
-      // play the 2D airport to your gate & seat, then take off
-      this.#playAirport({
-        origin: this.originCode, originCity: origin.name, dest: this.destCode, destCity: dest.name,
-        seat: this.seat, member: tierFor().name, flight: this.flightNo, gate: this.gate,
-      }).then(() => this.#begin());
-    } else {
-      this.#showBoardingQueue(() => this.#begin());
-      // begin even if the boarding queue is interrupted
-      this.takeoffBackstop = gsap.delayedCall(11, () => this.#begin());
-    }
+    // pressing Board plays the 2D airport to your gate & seat; take off when you board (or skip)
+    this.#playAirport({
+      origin: this.originCode, originCity: origin.name, dest: this.destCode, destCity: dest.name,
+      seat: this.seat, member: tierFor().name, flight: this.flightNo, gate: this.gate,
+    }).then(() => this.#begin());
   }
 
   #showBoardingQueue(onDone, opts = {}) {
