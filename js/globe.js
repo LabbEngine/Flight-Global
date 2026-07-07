@@ -1,81 +1,7 @@
-// The centerpiece: Earth with a real-time day/night terminator, city lights,
-// drifting clouds, an atmospheric halo, and a procedural star field.
+// The centerpiece: a plain backdrop sphere (the satellite tile layer in tiles.js
+// is the real surface), drifting clouds, an atmospheric halo, and a star field.
 import * as THREE from '../vendor/three/three.module.js';
 import { latLngToVec3, subsolarPoint } from './geo.js';
-
-const EARTH_VERT = /* glsl */ `
-  varying vec2 vUv;
-  varying vec3 vNormal;
-  varying vec3 vWorldPos;
-  void main() {
-    vUv = uv;
-    vNormal = normalize(mat3(modelMatrix) * normal);
-    vec4 wp = modelMatrix * vec4(position, 1.0);
-    vWorldPos = wp.xyz;
-    gl_Position = projectionMatrix * viewMatrix * wp;
-  }
-`;
-
-const EARTH_FRAG = /* glsl */ `
-  uniform sampler2D dayMap;
-  uniform sampler2D detailMap;
-  uniform float detailAmt;
-  uniform float uBrightness;
-  uniform float uDaylit;
-  uniform vec3 sunDir;
-  varying vec2 vUv;
-  varying vec3 vNormal;
-  varying vec3 vWorldPos;
-
-  void main() {
-    vec3 n = normalize(vNormal);
-    vec3 viewDir = normalize(cameraPosition - vWorldPos);
-    vec3 day = texture2D(dayMap, vUv).rgb;
-    // Fight magnification blur when zoomed in: an unsharp mask sharpens the
-    // real texture (coastlines, terrain), and a touch of fine procedural
-    // grain fills in below the texel scale.
-    if (detailAmt > 0.001) {
-      vec2 texel = vec2(1.0 / 8192.0, 1.0 / 4096.0);
-      vec3 dBlur = (
-        texture2D(dayMap, vUv + vec2(texel.x, 0.0)).rgb +
-        texture2D(dayMap, vUv - vec2(texel.x, 0.0)).rgb +
-        texture2D(dayMap, vUv + vec2(0.0, texel.y)).rgb +
-        texture2D(dayMap, vUv - vec2(0.0, texel.y)).rgb) * 0.25;
-      day = clamp(day + (day - dBlur) * detailAmt * 1.6, 0.0, 1.0);
-      float d1 = texture2D(detailMap, vUv * vec2(340.0, 170.0)).r;
-      float d2 = texture2D(detailMap, vUv * vec2(96.0, 48.0)).g;
-      float det = d1 * 0.6 + d2 * 0.4;
-      day *= mix(1.0, 0.86 + 0.28 * det, detailAmt);
-    }
-
-    float sunDot = dot(n, sunDir);
-    float dayF = smoothstep(-0.15, 0.25, sunDot);
-
-    vec3 dayLit = day * (0.28 + 0.85 * clamp(sunDot, 0.0, 1.0));
-    vec3 col = mix(day * 0.05, dayLit, dayF); // real-sun shading (overridden while daylit)
-
-    // warm band along the terminator (real day/night only)
-    float twilight = smoothstep(-0.22, 0.02, sunDot) * (1.0 - smoothstep(0.02, 0.3, sunDot));
-    col += vec3(0.55, 0.22, 0.06) * twilight * 0.22;
-
-    // fully-daylit override: day texture, evenly lit everywhere so the flight's
-    // dimming reads clearly against a bright globe
-    vec3 flatDay = day * (0.95 + 0.12 * (sunDot * 0.5 + 0.5));
-    col = mix(col, flatDay, uDaylit);
-    float dayMask = mix(dayF, 1.0, uDaylit);
-
-    // sun glint on water (oceans are the blue-dominant pixels)
-    float water = smoothstep(0.04, 0.18, day.b - day.r);
-    float spec = pow(clamp(dot(reflect(-sunDir, n), viewDir), 0.0, 1.0), 28.0);
-    col += vec3(1.0, 0.93, 0.8) * spec * water * dayMask * 0.55;
-
-    // atmosphere hugging the limb
-    float fres = pow(1.0 - clamp(dot(n, viewDir), 0.0, 1.0), 2.8);
-    col += vec3(0.28, 0.52, 0.95) * fres * (0.18 + 0.5 * dayMask);
-
-    gl_FragColor = vec4(col * uBrightness, 1.0);
-  }
-`;
 
 const HALO_VERT = /* glsl */ `
   varying vec3 vNormalV;
@@ -99,43 +25,6 @@ const HALO_FRAG = /* glsl */ `
     gl_FragColor = vec4(col * rim * lit * uBrightness, 1.0);
   }
 `;
-
-// Tiling value-noise texture used for close-zoom terrain grain.
-// Procedural, so the "single 8K texture" contract stays intact.
-function makeDetailTexture() {
-  const size = 512;
-  const c = document.createElement('canvas');
-  c.width = c.height = size;
-  const ctx = c.getContext('2d');
-  const img = ctx.createImageData(size, size);
-  const rand = new Float32Array(64 * 64);
-  for (let i = 0; i < rand.length; i++) rand[i] = Math.random();
-  const sample = (x, y, freq) => {
-    const fx = (x / size) * freq, fy = (y / size) * freq;
-    const x0 = Math.floor(fx) % 64, y0 = Math.floor(fy) % 64;
-    const x1 = (x0 + 1) % 64, y1 = (y0 + 1) % 64;
-    const tx = fx - Math.floor(fx), ty = fy - Math.floor(fy);
-    const sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty);
-    const a = rand[y0 * 64 + x0], b = rand[y0 * 64 + x1];
-    const d = rand[y1 * 64 + x0], e = rand[y1 * 64 + x1];
-    return a + (b - a) * sx + (d - a) * sy + (a - b - d + e) * sx * sy;
-  };
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const r = sample(x, y, 10) * 0.42 + sample(x, y, 22) * 0.32 + sample(x, y, 46) * 0.26;
-      const g = sample(x, y, 5) * 0.6 + sample(x, y, 15) * 0.4;
-      const i = (y * size + x) * 4;
-      img.data[i] = r * 255;
-      img.data[i + 1] = g * 255;
-      img.data[i + 2] = 0;
-      img.data[i + 3] = 255;
-    }
-  }
-  ctx.putImageData(img, 0, 0);
-  const tex = new THREE.CanvasTexture(c);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  return tex;
-}
 
 function makeStarTexture() {
   const c = document.createElement('canvas');
@@ -184,22 +73,14 @@ function makeStars() {
 }
 
 export function buildGlobe(scene, textures, maxAnisotropy) {
-  textures.day.anisotropy = maxAnisotropy;
-  textures.day.colorSpace = THREE.NoColorSpace;
-
   const earthGeo = new THREE.SphereGeometry(1, 128, 128);
   const uniforms = {
-    dayMap: { value: textures.day },
-    detailMap: { value: makeDetailTexture() },
-    detailAmt: { value: 0 },
     uBrightness: { value: 1 },
-    uDaylit: { value: 1 }, // globe is fully daylit so the flight dimming is visible
     sunDir: { value: new THREE.Vector3(1, 0, 0) },
   };
-  const earth = new THREE.Mesh(
-    earthGeo,
-    new THREE.ShaderMaterial({ uniforms, vertexShader: EARTH_VERT, fragmentShader: EARTH_FRAG })
-  );
+  // No baked Earth texture — the satellite tile layer is the only surface. This
+  // plain sphere is just a backdrop for the poles and the first-load frame.
+  const earth = new THREE.Mesh(earthGeo, new THREE.MeshBasicMaterial({ color: 0x0e2136 }));
   scene.add(earth);
 
   // clouds: the texture is white-on-black, so it doubles as its own alpha
@@ -244,6 +125,7 @@ export function buildGlobe(scene, textures, maxAnisotropy) {
   let sunTimer = 0;
   return {
     earth, clouds,
+    get brightness() { return uniforms.uBrightness.value; },
     setSun,
     // Tween the whole globe's brightness (used to dim the map once a flight starts).
     setBrightness(v, dur = 1) {
@@ -254,7 +136,6 @@ export function buildGlobe(scene, textures, maxAnisotropy) {
       // descend below the cloud deck: clouds fade out, terrain grain fades in
       clouds.material.opacity = 0.75 * THREE.MathUtils.smoothstep(altitude, 0.05, 0.17) * uniforms.uBrightness.value;
       clouds.visible = clouds.material.opacity > 0.01;
-      uniforms.detailAmt.value = 0.8 * (1 - THREE.MathUtils.smoothstep(altitude, 0.03, 0.65));
       sunTimer += dt;
       if (sunTimer > 30) { // terminator creeps in real time
         sunTimer = 0;

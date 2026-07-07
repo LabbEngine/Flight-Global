@@ -4,6 +4,10 @@ import * as THREE from '../vendor/three/three.module.js';
 export const EARTH_RADIUS_KM = 6371;
 export const DEG = Math.PI / 180;
 
+// Minimum flight altitude: the plane always cruises at least this far above the
+// surface, so it never sinks into the draped satellite tiles.
+const MIN_FLY = 0.0045;
+
 // Maps lat/lng to a point on the sphere, matching how an equirectangular
 // texture wraps a three.js SphereGeometry.
 export function latLngToVec3(lat, lng, r = 1) {
@@ -64,13 +68,14 @@ export class GreatCircleCurve extends THREE.Curve {
       a.y * w1 + b.y * w2,
       a.z * w1 + b.z * w2
     ).normalize();
-    return target.multiplyScalar(1 + this.alt * Math.sin(Math.PI * t));
+    return target.multiplyScalar(1 + Math.max(MIN_FLY, this.alt * Math.sin(Math.PI * t)));
   }
 }
 
-// A pleasing arc height: longer routes fly higher.
+// A pleasing arc height: longer routes fly a little higher. Kept low (real-ish
+// cruise) so the plane hugs the ground and the satellite tiles render in detail.
 export function arcAltitude(angular) {
-  return 0.012 + angular * 0.075;
+  return 0.006 + angular * 0.018;
 }
 
 // Where the sun is directly overhead right now. Declination approximation

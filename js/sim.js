@@ -44,6 +44,7 @@ export class FlightSim {
     this.orbitYaw = 0; // Behind-view drag: swing around the plane (0 = directly behind)
     this.orbitPitch = 0;
     this.tripMinutes = 15; this.layoverMinutes = 5; // set from the planner when you board
+    this.gameEnabled = localStorage.getItem('fg_game') === '1'; // 2D airport minigame — off by default, HUD button toggles it
     this.boardingEl = document.getElementById('boarding');
     this.dashEl = document.getElementById('sim-dash');
     this.cabinEl = document.getElementById('cabin-view');
@@ -67,12 +68,14 @@ export class FlightSim {
   }
 
   get busy() { return this.inFlight || this.finishing || this.takingOff; }
+  setGameEnabled(v) { this.gameEnabled = !!v; }
 
   // ---------- boarding ----------
   openBoarding(ctx) {
     if (!this.boardingEl.hidden) return; // already boarding — don't wipe the seat pick
     this.ctx = ctx;
     this.seat = null;
+    this.simAirports = this.gameEnabled; // also play the airport at each connecting stop
     this.tripMinutes = ctx.tripMinutes || 15;
     this.layoverMinutes = ctx.layoverMinutes || 5;
     const { origin, dest, aircraft } = ctx;
@@ -187,14 +190,22 @@ export class FlightSim {
     document.body.classList.add('sim-on');
     this.globe.setBrightness(1.24, 0.7);
     this.ui.toast(`Seat ${this.seat} · welcome aboard`);
-    const { origin } = this.ctx;
+    const { origin, dest } = this.ctx;
     this.controls.flyTo({ lat: origin.lat, lng: origin.lng, dist: 1.14, duration: 2.4 }); // zoom into the gate
-    this.#showBoardingQueue(() => this.#begin());
-    // begin even if the boarding queue is interrupted
-    this.takeoffBackstop = gsap.delayedCall(11, () => this.#begin());
+    if (this.gameEnabled) {
+      // play the 2D airport to your gate & seat; take off when you board (or skip)
+      this.#playAirport({
+        origin: this.originCode, originCity: origin.name, dest: this.destCode, destCity: dest.name,
+        seat: this.seat, member: tierFor().name, flight: this.flightNo, gate: this.gate,
+      }).then(() => this.#begin());
+    } else {
+      this.#showBoardingQueue(() => this.#begin());
+      // begin even if the boarding queue is interrupted
+      this.takeoffBackstop = gsap.delayedCall(11, () => this.#begin());
+    }
   }
 
-  #showBoardingQueue(onDone) {
+  #showBoardingQueue(onDone, opts = {}) {
     const tier = tierFor();
     const groups = [
       { name: 'Passengers needing assistance', tier: null },
@@ -206,11 +217,14 @@ export class FlightSim {
     ];
     const youIdx = Math.max(0, groups.findIndex((g) => g.tier === tier.key));
     const el = document.getElementById('board-queue');
+    const title = opts.title || 'Now boarding';
+    const flightLine = opts.flight || `${this.flightNo} · Gate ${this.gate}`;
+    const footEnd = opts.footEnd || "You're aboard — cleared for pushback";
     el.innerHTML = `
       <div class="bq-card glass">
         <div class="bq-head">
-          <span class="bq-title">Now boarding</span>
-          <span class="bq-flight">${this.flightNo} · Gate ${this.gate}</span>
+          <span class="bq-title">${title}</span>
+          <span class="bq-flight">${flightLine}</span>
         </div>
         <div class="bq-sub"><b style="color:${tier.color}">${tier.name} member</b> · you're in group ${youIdx + 1} of ${groups.length}</div>
         <div class="bq-list">
@@ -228,7 +242,7 @@ export class FlightSim {
     const tl = gsap.timeline({
       onComplete: () => {
         gsap.to(card, { opacity: 0, scale: 0.95, duration: 0.45, ease: 'power2.in', onComplete: () => { el.hidden = true; } });
-        onDone();
+        if (onDone) onDone();
       },
     });
     tl.fromTo(card, { opacity: 0, y: 24, scale: 0.9 }, { opacity: 1, y: 0, scale: 1, duration: 0.6, ease: 'back.out(1.5)' });
@@ -239,9 +253,40 @@ export class FlightSim {
       tl.add(() => { row.classList.remove('is-boarding'); row.classList.add('is-done'); }, t + per * 0.62);
       tl.to('#bq-fill', { width: `${((i + 1) / boardCount) * 100}%`, duration: per * 0.62, ease: 'power1.out' }, t);
     });
-    tl.add(() => { const f = document.getElementById('bq-foot'); if (f) f.textContent = "You're aboard — cleared for pushback"; }, 0.5 + boardCount * per);
+    tl.add(() => { const f = document.getElementById('bq-foot'); if (f) f.textContent = footEnd; }, 0.5 + boardCount * per);
     tl.to({}, { duration: 0.9 });
     this.queueTl = tl;
+  }
+
+  // Launch the 2D airport minigame overlay; resolves when the player boards (or skips).
+  #playAirport(params) {
+    return new Promise((resolve) => {
+      const host = document.getElementById('airport-game');
+      const frame = document.getElementById('airport-frame');
+      if (!host || !frame) { resolve(); return; }
+      const onMsg = (e) => {
+        if (!e.data || e.data.type !== 'airport-done') return;
+        window.removeEventListener('message', onMsg);
+        setTimeout(() => { host.hidden = true; frame.src = 'about:blank'; resolve(); }, e.data.skipped ? 200 : 1500);
+      };
+      window.addEventListener('message', onMsg);
+      frame.src = 'airport.html?' + new URLSearchParams(params).toString();
+      host.hidden = false;
+    });
+  }
+  #pauseJourney() { if (!this._pauseAt) this._pauseAt = performance.now(); }        // freeze the flight timeline
+  #skipJourneyTo(t) { this._pauseAt = 0; this.flightStartPerf = performance.now() - t * 1000; } // resume, jump to time t
+  // A connecting airport: pause the flight, play the pitstop game, then depart the next leg.
+  #airportStop(stopIdx, stopEndS) {
+    this.#pauseJourney();
+    const flight = this.ctx.flight || {};
+    const stop = flight.stops?.[stopIdx];
+    const nextLeg = (flight.legs || [])[stopIdx + 1];
+    this.#playAirport({
+      origin: this.#wpCode(stop), originCity: stop?.name || '',
+      dest: nextLeg ? this.#wpCode(nextLeg.to) : this.destCode, destCity: nextLeg?.to?.name || this.ctx.dest.name,
+      seat: this.seat, member: tierFor().name, flight: this.flightNo, gate: this.gate,
+    }).then(() => this.#skipJourneyTo(stopEndS));
   }
 
   #hideQueue() {
@@ -322,6 +367,8 @@ export class FlightSim {
     }
     this.journeyDurS = Math.max(1, t);
     this.atStop = null;
+    this._shownStop = -1; // last connecting airport we played the pitstop for
+    this._pauseAt = 0; // >0 while the flight timeline is frozen for the airport game
     this.legIdx = 0; // which leg is current, for the "Leg" camera + dashboard readout
   }
   #stopName(i) { const s = this.ctx.flight?.stops?.[i]; return s ? (s.iata || s.name) : 'stop'; }
@@ -338,12 +385,17 @@ export class FlightSim {
       return;
     }
     if (!this.inFlight || this.landed) return;
+    if (this._pauseAt) return; // frozen while the airport pitstop game is up
     const el = this.#elapsedS();
     let ph = this.journey[this.journey.length - 1];
     for (const p of this.journey) { if (el < p.t1) { ph = p; break; } }
     if (ph && ph.type === 'stop') {
       this.route.setProgressKm(ph.km);
       this.atStop = { name: this.#stopName(ph.stopIdx), remainS: Math.max(0, ph.t1 - el) };
+      if (this.simAirports && this._shownStop !== ph.stopIdx) {
+        this._shownStop = ph.stopIdx; // once, when we first reach this airport
+        this.#airportStop(ph.stopIdx, ph.t1);
+      }
     } else if (ph) {
       const f = ph.t1 > ph.t0 ? Math.min(1, (el - ph.t0) / (ph.t1 - ph.t0)) : 1;
       this.route.setProgressKm(ph.km0 + (ph.km1 - ph.km0) * f);
@@ -410,11 +462,11 @@ export class FlightSim {
         const dir = st.fwd.clone().multiplyScalar(-1).addScaledVector(up, 0.34).normalize();
         dir.applyAxisAngle(up, this.orbitYaw);
         dir.applyAxisAngle(right.clone().applyAxisAngle(up, this.orbitYaw), this.orbitPitch);
-        camPos = st.pos.clone().addScaledVector(dir, 0.06 * this.followZoom);
+        camPos = st.pos.clone().addScaledVector(dir, 0.042 * this.followZoom);
         q = quatLookAt(camPos, st.pos, up); // plane stays centered whatever the orbit
       } else {
-        // top: a high overhead so you see plenty of ground around the plane
-        camPos = st.pos.clone().addScaledVector(up, 0.16 * this.followZoom);
+        // top: a lower overhead so the satellite ground renders in high detail
+        camPos = st.pos.clone().addScaledVector(up, 0.085 * this.followZoom);
         q = quatLookAt(camPos, st.pos, st.fwd);
       }
       if (camPos.length() < 1.006) camPos.setLength(1.006);
@@ -428,7 +480,7 @@ export class FlightSim {
     this.camera.updateProjectionMatrix();
   }
 
-  zoomBy(f) { this.followZoom = THREE.MathUtils.clamp(this.followZoom * f, 0.4, 3.4); }
+  zoomBy(f) { this.followZoom = THREE.MathUtils.clamp(this.followZoom * f, 0.2, 3.4); } // 0.2 = zoom in twice as close
 
   // ---------- dashboard ----------
   #buildDashboard() {

@@ -254,7 +254,7 @@ export class FlightRoute {
     const upO = new THREE.Vector3().crossVectors(fwd, right).normalize();
     this.plane.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(right, upO, fwd));
     const camScale = THREE.MathUtils.clamp((camera.position.length() - 1) * 1.25, 0.4, 3);
-    this.plane.scale.setScalar(0.016 * camScale);
+    this.plane.scale.setScalar(0.008 * camScale); // half-size so it doesn't hide the map below
     this._planePos.copy(pos);
     this._planeFwd.copy(fwd);
 

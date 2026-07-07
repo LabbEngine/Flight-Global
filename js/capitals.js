@@ -30,21 +30,28 @@ export class CapitalLabels {
   setActive(on) {
     if (this.active === on) return;
     this.active = on;
-    if (!on) for (const it of this.items) it.el.style.display = 'none';
+    if (!on) for (const it of this.items) { it.el.style.display = 'none'; it.shown = false; }
   }
 
   update(camera, w, h) {
     if (!this.active) return;
     const placed = [];
     for (const it of this.items) {
-      if (!facesCamera(it.pos, camera)) { it.el.style.display = 'none'; continue; }
-      const s = worldToScreen(it.pos, camera, w, h);
-      if (!s || s.x < 0 || s.x > w || s.y < 0 || s.y > h) { it.el.style.display = 'none'; continue; }
-      it.el.style.display = '';
+      // decide visibility first; only touch the DOM when something actually changes
+      let s = null;
+      if (facesCamera(it.pos, camera)) {
+        s = worldToScreen(it.pos, camera, w, h);
+        if (s && (s.x < 0 || s.x > w || s.y < 0 || s.y > h)) s = null;
+      }
+      if (!s) {
+        if (it.shown !== false) { it.el.style.display = 'none'; it.shown = false; }
+        continue;
+      }
+      if (it.shown !== true) { it.el.style.display = ''; it.shown = true; }
       it.el.style.transform = `translate(${s.x.toFixed(1)}px, ${s.y.toFixed(1)}px)`;
       // biggest capitals (iterated first) claim a name label; overlapping ones stay dots
       const labelled = placed.length < MAX_LABELS && !placed.some((p) => Math.abs(p.x - s.x) < 76 && Math.abs(p.y - s.y) < 20);
-      it.el.classList.toggle('is-labelled', labelled);
+      if (labelled !== it.labelled) { it.el.classList.toggle('is-labelled', labelled); it.labelled = labelled; }
       if (labelled) placed.push(s);
     }
   }

@@ -25,6 +25,7 @@ const rowZ = (r) => (r - 1) * ROW_PITCH;           // row 1 at the front (z=0), 
 const CABIN_LEN = (ROWS - 1) * ROW_PITCH + 3.4;
 const MID_Z = ((ROWS - 1) * ROW_PITCH) / 2;
 const WIN_Y = 0.12;
+const WIN_FWD = 0.35;               // windows shifted toward the nose so the seat doesn't hide them
 const SCREEN_Y = FLOOR_Y + 0.92;    // seat-back screen height
 const BACK_FACE_Z = 0.27;           // +Z offset of a seat back's rear face
 const ellipseX = (y) => RADIUS * Math.sqrt(Math.max(0, 1 - (y / V_RADIUS) ** 2));
@@ -418,15 +419,15 @@ export class CabinView {
   #buildWindows() {
     const skyMat = new THREE.ShaderMaterial({ uniforms: this.sky, vertexShader: SKY_VERT, fragmentShader: SKY_FRAG, side: THREE.FrontSide });
     const trim = new THREE.MeshStandardMaterial({ color: 0xd0d4da, roughness: 0.7, metalness: 0.1, envMapIntensity: 0.6, side: THREE.DoubleSide });
-    const winGeo = new THREE.ShapeGeometry(rrShape(0.13, 0.19, 0.115)); // tall, heavily-rounded oval window
-    const frameShape = rrShape(0.165, 0.225, 0.15); frameShape.holes.push(rrHole(0.134, 0.194, 0.118));
+    const winGeo = new THREE.ShapeGeometry(rrShape(0.17, 0.25, 0.15)); // tall, heavily-rounded oval window (enlarged)
+    const frameShape = rrShape(0.21, 0.29, 0.18); frameShape.holes.push(rrHole(0.175, 0.255, 0.155));
     const frameIM = new THREE.InstancedMesh(new THREE.ShapeGeometry(frameShape), trim, ROWS * 2);
     const dummy = new THREE.Object3D();
     const ex = ellipseX(WIN_Y);
     let k = 0;
     for (let r = 1; r <= ROWS; r++) {
       for (const side of [-1, 1]) {
-        const z = rowZ(r);
+        const z = rowZ(r) - WIN_FWD; // toward the nose, clear of the seat
         const win = new THREE.Mesh(winGeo, skyMat);
         win.position.set((ex - 0.02) * side, WIN_Y, z); win.lookAt(0, WIN_Y, z);
         this.scene.add(win);
@@ -564,7 +565,7 @@ export class CabinView {
     const windowLeft = L === 'A' || L === 'B' || L === 'C';
     this.camera.position.set(SEAT_X[L], EYE_Y, rowZ(row) - 0.05);
     // the window on your side of the fuselage — the "Window view" button aims here
-    this._winTarget = new THREE.Vector3((ellipseX(WIN_Y) - 0.02) * (windowLeft ? -1 : 1), WIN_Y, rowZ(row));
+    this._winTarget = new THREE.Vector3((ellipseX(WIN_Y) - 0.02) * (windowLeft ? -1 : 1), WIN_Y, rowZ(row) - WIN_FWD);
     this.yaw = this.tYaw = windowLeft ? 0.5 : -0.5;
     this.pitch = this.tPitch = -0.02;
     this.tag.textContent = `Seat ${row}${L} · drag to look around`;
