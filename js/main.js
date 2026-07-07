@@ -178,6 +178,7 @@ async function boot() {
     },
     simBusy() { return sim.busy; },
     exitSim() { sim.exit(); },
+    setGameEnabled(v) { sim.setGameEnabled(v); },
 
     calculate({ recenter = true, silent = false } = {}) {
       if (sim.busy) return; // never rebuild the route under a boarding/flying/finishing sim

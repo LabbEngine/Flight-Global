@@ -51,7 +51,7 @@ export function initUI(app) {
     infoPanel: $('info-panel'), infoBody: $('info-body'),
     toast: $('toast'), coords: $('coords'), fps: $('fps'),
     compassRose: $('compass-rose'), searchInput: $('search-input'),
-    themeBtn: $('theme-btn'), fsBtn: $('fs-btn'),
+    gameBtn: $('game-toggle'), fsBtn: $('fs-btn'),
     planner: $('planner'), seClockTime: $('se-clock-time'),
   };
 
@@ -338,12 +338,18 @@ export function initUI(app) {
   }
 
   // ---------- top-right / bottom-right controls ----------
-  els.themeBtn.addEventListener('click', () => {
-    const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
-    document.documentElement.dataset.theme = next;
-    localStorage.setItem('fg_theme', next);
+  // 2D airport minigame toggle — off by default; on turns it on for every future boarding.
+  const setGameBtn = (on) => {
+    els.gameBtn.classList.toggle('is-on', on);
+    els.gameBtn.title = `2D airport minigame: ${on ? 'on' : 'off'}`;
+  };
+  els.gameBtn.addEventListener('click', () => {
+    const on = !els.gameBtn.classList.contains('is-on');
+    setGameBtn(on);
+    localStorage.setItem('fg_game', on ? '1' : '0');
+    app.setGameEnabled(on);
   });
-  document.documentElement.dataset.theme = localStorage.getItem('fg_theme') || 'dark';
+  setGameBtn(localStorage.getItem('fg_game') === '1'); // sim.js reads the same key for its own initial state
 
   $('reset-btn').addEventListener('click', () => { app.resetAll(); toast('Everything reset'); });
   els.fsBtn.addEventListener('click', toggleFullscreen);

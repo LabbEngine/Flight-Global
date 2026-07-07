@@ -44,6 +44,7 @@ export class FlightSim {
     this.orbitYaw = 0; // Behind-view drag: swing around the plane (0 = directly behind)
     this.orbitPitch = 0;
     this.tripMinutes = 15; this.layoverMinutes = 5; // set from the planner when you board
+    this.gameEnabled = localStorage.getItem('fg_game') === '1'; // 2D airport minigame — off by default, HUD button toggles it
     this.boardingEl = document.getElementById('boarding');
     this.dashEl = document.getElementById('sim-dash');
     this.cabinEl = document.getElementById('cabin-view');
@@ -67,16 +68,16 @@ export class FlightSim {
   }
 
   get busy() { return this.inFlight || this.finishing || this.takingOff; }
+  setGameEnabled(v) { this.gameEnabled = !!v; }
 
   // ---------- boarding ----------
   openBoarding(ctx) {
     if (!this.boardingEl.hidden) return; // already boarding — don't wipe the seat pick
     this.ctx = ctx;
     this.seat = null;
-    this.simAirports = true; // also play the airport at each connecting stop (board always plays it)
+    this.simAirports = this.gameEnabled; // also play the airport at each connecting stop
     this.tripMinutes = ctx.tripMinutes || 15;
     this.layoverMinutes = ctx.layoverMinutes || 5;
-    const multiLeg = (ctx.flight?.legs?.length || 1) > 1;
     const { origin, dest, aircraft } = ctx;
     // real airport call signs (e.g. ARN, HND) — supplied by main from the atlas
     this.originCode = ctx.originCode || (origin.iata || origin.name.slice(0, 3)).toUpperCase();
@@ -124,7 +125,6 @@ export class FlightSim {
           </div>
         </div>
         <div class="bp-trip">${this.#tripSummary()}</div>
-        ${multiLeg ? `<button class="bp-simair is-on" id="bp-simair" type="button"><span class="simair-check"></span><span>Airport at each stop</span><span class="simair-hint">play a pitstop at every connection</span></button>` : ''}
         <button class="btn btn--primary" id="bp-board" disabled>Pick a seat to board</button>
       </div>`;
     this.#buildSeatMap();
@@ -133,8 +133,6 @@ export class FlightSim {
       { opacity: 1, y: 0, scale: 1, duration: 0.45, ease: 'power3.out' });
     document.getElementById('bp-close').onclick = () => this.closeBoarding();
     document.getElementById('bp-board').onclick = () => this.#startBoarding();
-    const simBtn = document.getElementById('bp-simair');
-    if (simBtn) simBtn.onclick = () => { this.simAirports = !this.simAirports; simBtn.classList.toggle('is-on', this.simAirports); };
   }
 
   boardRandomSeat() {
@@ -194,11 +192,17 @@ export class FlightSim {
     this.ui.toast(`Seat ${this.seat} · welcome aboard`);
     const { origin, dest } = this.ctx;
     this.controls.flyTo({ lat: origin.lat, lng: origin.lng, dist: 1.14, duration: 2.4 }); // zoom into the gate
-    // pressing Board plays the 2D airport to your gate & seat; take off when you board (or skip)
-    this.#playAirport({
-      origin: this.originCode, originCity: origin.name, dest: this.destCode, destCity: dest.name,
-      seat: this.seat, member: tierFor().name, flight: this.flightNo, gate: this.gate,
-    }).then(() => this.#begin());
+    if (this.gameEnabled) {
+      // play the 2D airport to your gate & seat; take off when you board (or skip)
+      this.#playAirport({
+        origin: this.originCode, originCity: origin.name, dest: this.destCode, destCity: dest.name,
+        seat: this.seat, member: tierFor().name, flight: this.flightNo, gate: this.gate,
+      }).then(() => this.#begin());
+    } else {
+      this.#showBoardingQueue(() => this.#begin());
+      // begin even if the boarding queue is interrupted
+      this.takeoffBackstop = gsap.delayedCall(11, () => this.#begin());
+    }
   }
 
   #showBoardingQueue(onDone, opts = {}) {
