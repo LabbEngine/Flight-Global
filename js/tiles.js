@@ -1,17 +1,18 @@
-// Deep-zoom detail: when you zoom close AND have internet, stream Esri World
-// Imagery tiles and drape them on the sphere so you can actually investigate
-// the ground. Keyless (no billing, unlike Google), and fully optional — if the
-// tiles can't load (offline), the base globe simply shows through. This is the
-// one online feature; everything else runs offline.
+// The globe surface: OpenStreetMap tiles draped on the sphere at every zoom.
+// The tile zoom is chosen so the loaded grid always covers the whole visible
+// cap — coarse far out, finer as you zoom in. Streams from OSM when online;
+// offline the base satellite sphere shows through (poles always do, since the
+// Web-Mercator tile scheme stops at ±85°). © OpenStreetMap contributors.
 import * as THREE from '../vendor/three/three.module.js';
 import { latLngToVec3 } from './geo.js';
 
+// OSM standard tiles: keyless. Please respect the OSM tile usage policy.
 const TILE_URL = (z, x, y) =>
-  `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`;
-const ENGAGE_DIST = 1.11; // ~700 km altitude
-const GRID = 2;           // (2*GRID+1)^2 tiles -> 5x5 around the look point
+  `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
+const GRID = 3;           // (2*GRID+1)^2 tiles -> 7x7 around the look point
 const PATCH = 8;          // mesh subdivisions per tile (for sphere curvature)
-const R = 1.0006;         // just above the base surface, below the cloud shell
+const R = 1.0025;         // clearly above the base sphere so the limb doesn't z-fight
+const MIN_Z = 2;
 const MAX_Z = 17;
 
 const clampLat = (l) => Math.max(-85.05, Math.min(85.05, l));
@@ -106,12 +107,15 @@ export class TileLayer {
 
   update(camera) {
     const dist = camera.position.length();
-    if (!this.enabled || dist > ENGAGE_DIST) {
+    if (!this.enabled) {
       if (this.active || this.cache.size) this.#clear();
       return;
     }
-    const altKm = (dist - 1) * 6371;
-    const z = this.#zoomFor(altKm);
+    // Pick a zoom so the (2*GRID+1)^2 grid spans the whole visible cap: the
+    // globe is fully draped in OSM at any distance, gaining detail as you close in.
+    const capFullDeg = 2 * Math.acos(THREE.MathUtils.clamp(1 / dist, 0, 1)) * 180 / Math.PI;
+    const span = 2 * GRID + 1;
+    const z = THREE.MathUtils.clamp(Math.floor(Math.log2(360 * span / Math.max(18, capFullDeg))), MIN_Z, MAX_Z);
     const c = camera.position.clone().normalize();
     const lat = clampLat(90 - Math.acos(THREE.MathUtils.clamp(c.y, -1, 1)) * 180 / Math.PI);
     let lng = Math.atan2(c.z, -c.x) * 180 / Math.PI - 180;

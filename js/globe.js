@@ -202,7 +202,9 @@ export function buildGlobe(scene, textures, maxAnisotropy) {
   );
   scene.add(earth);
 
-  // clouds: the texture is white-on-black, so it doubles as its own alpha
+  // clouds: the texture is white-on-black, so it doubles as its own alpha.
+  // Kept for the return API but NOT added to the scene — a white cloud deck fogs
+  // out the OpenStreetMap surface, so the OSM globe renders crisp and cloudless.
   textures.clouds.anisotropy = Math.min(4, maxAnisotropy);
   const clouds = new THREE.Mesh(
     new THREE.SphereGeometry(1.008, 96, 96),
@@ -211,7 +213,7 @@ export function buildGlobe(scene, textures, maxAnisotropy) {
       opacity: 0.75, depthWrite: false,
     })
   );
-  scene.add(clouds);
+  clouds.visible = false;
 
   const halo = new THREE.Mesh(
     new THREE.SphereGeometry(1.045, 96, 96),

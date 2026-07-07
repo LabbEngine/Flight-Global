@@ -107,7 +107,20 @@ export class FlightSim {
           <div class="bp-strip"></div>
         </div>
         <div class="bp-seats-title">Choose your seat</div>
-        <div class="seat-map" id="seat-map"></div>
+        <div class="cabin-map">
+          <div class="cabin-nose">
+            <svg viewBox="0 0 234 58" preserveAspectRatio="none" aria-hidden="true">
+              <defs><linearGradient id="fuseNose" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b313a"/><stop offset="1" stop-color="#12151b"/></linearGradient></defs>
+              <path d="M117 3 C58 3 14 25 6 58 L228 58 C220 25 176 3 117 3 Z" fill="url(#fuseNose)" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+              <path d="M117 17 C97 17 81 26 75 39 L159 39 C153 26 137 17 117 17 Z" fill="rgba(130,165,200,0.14)"/>
+              <path d="M117 17 L117 39" stroke="rgba(20,24,30,0.6)" stroke-width="1.4"/>
+            </svg>
+          </div>
+          <div class="cabin-body">
+            <div class="cabin-cols"><span>A</span><span>B</span><span>C</span><span></span><span>D</span><span>E</span><span>F</span></div>
+            <div class="seat-map" id="seat-map"></div>
+          </div>
+        </div>
         <div class="bp-trip">${this.#tripSummary()}</div>
         <button class="btn btn--primary" id="bp-board" disabled>Pick a seat to board</button>
       </div>`;
@@ -134,7 +147,6 @@ export class FlightSim {
     for (let r = 1; r <= ROWS; r++) {
       const row = document.createElement('div');
       row.className = 'seat-row';
-      row.innerHTML = `<span class="seat-rownum">${r}</span>`;
       groups.forEach((group, gi) => {
         const g = document.createElement('span');
         g.className = 'seat-group';
@@ -148,7 +160,8 @@ export class FlightSim {
           g.appendChild(seat);
         }
         row.appendChild(g);
-        if (gi < groups.length - 1) row.insertAdjacentHTML('beforeend', '<span class="seat-aisle"></span>');
+        // row number sits in the centre aisle, between the two seat blocks
+        if (gi === 0) row.insertAdjacentHTML('beforeend', `<span class="seat-rownum">${String(r).padStart(2, '0')}</span>`);
       });
       map.appendChild(row);
     }
