@@ -10,9 +10,10 @@ import { latLngToVec3 } from './geo.js';
 // Esri World Imagery: keyless high-res satellite (note the z/y/x order).
 const TILE_URL = (z, x, y) =>
   `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`;
-const BASE_Z = 3;         // whole-world base layer, loaded once and kept forever
-const COV_GRID = 3;       // coverage: 7x7 tiles blanket the whole visible cap
-const DET_GRID = 3;       // detail: 7x7 high-zoom patch, pre-rendered wide
+const BASE_Z = 2;         // a light 16-tile world base, loaded once and kept forever
+const COV_MIN_Z = 3;      // coverage never coarser than this (the base fills the rest)
+const COV_GRID = 2;       // coverage: 5x5 tiles blanket the whole visible cap
+const DET_GRID = 2;       // detail: 5x5 high-zoom patch around the look point
 const PATCH = 8;          // mesh subdivisions per tile (for sphere curvature)
 const R_BASE = 1.0008;    // persistent world base, just above the plain sphere
 const R_COV = 1.0016;     // coverage shell, above the base
@@ -145,6 +146,10 @@ export class TileLayer {
       if (this.active || this.cache.size) this.#clear();
       return;
     }
+    // re-evaluate which tiles to hold at most ~12x/s — no need to churn every frame
+    const now = performance.now();
+    if (now - (this._lastUpdate || 0) < 80) return;
+    this._lastUpdate = now;
     this.#ensureBase();
     const altKm = (dist - 1) * 6371;
     const c = camera.position.clone().normalize();
@@ -155,7 +160,7 @@ export class TileLayer {
     // globe is always fully satellite. Detail tier: altitude-based deep zoom around
     // the look point, layered on top for street-level crispness when it beats coverage.
     const capFullDeg = 2 * Math.acos(THREE.MathUtils.clamp(1 / dist, 0, 1)) * 180 / Math.PI;
-    const zc = THREE.MathUtils.clamp(Math.floor(Math.log2(360 * (2 * COV_GRID + 1) / Math.max(18, capFullDeg))), BASE_Z, COV_MAX_Z);
+    const zc = THREE.MathUtils.clamp(Math.floor(Math.log2(360 * (2 * COV_GRID + 1) / Math.max(18, capFullDeg))), COV_MIN_Z, COV_MAX_Z);
     const zd = this.#zoomFor(altKm);
     const wantDetail = zd > zc;
     const cxc = lon2tile(lng, zc), cyc = lat2tile(lat, zc);
